@@ -1,29 +1,74 @@
-using System.Collections.Generic;
+using UnityEngine;
+using Vehicle.Input;
+using Vehicle.Specs;
 
 namespace Vehicle.Core
 {
-    public sealed class VehiclePipeline
+    [DisallowMultipleComponent]
+    [RequireComponent(typeof(Rigidbody))]
+    [RequireComponent(typeof(VehicleInputProvider))]
+    public sealed class VehicleController : MonoBehaviour
     {
-        private readonly List<IVehicleModule> _modules;
+        [SerializeField] private VehiclePipelineSpec pipelineSpec;
+        [SerializeField] private CarSpec carSpec;
 
-        public VehiclePipeline(List<IVehicleModule> modules)
-        {
-            _modules = modules ?? new List<IVehicleModule>();
-        }
+        private VehiclePipeline _pipeline;
+        private VehicleInputProvider _inputProvider;
+        private Rigidbody _rb;
+        private VehicleState _state;
 
-        public void Tick(in VehicleInput input, ref VehicleState state, in VehicleContext ctx)
+        private void Awake()
         {
-            for (int i = 0; i < _modules.Count; i++)
-                _modules[i].Tick(input, ref state, ctx);
-        }
+            _rb = GetComponent<Rigidbody>();
+            _inputProvider = GetComponent<VehicleInputProvider>();
 
-        public void NotifyCollision(UnityEngine.Collision collision, in VehicleContext ctx, ref VehicleState state)
-        {
-            for (int i = 0; i < _modules.Count; i++)
+            if (carSpec != null)
             {
-                if (_modules[i] is IVehicleCollisionListener listener)
-                    listener.OnCollisionEnter(collision, ctx, ref state);
+                ApplyRigidbodyDefaults();
             }
+
+            if (pipelineSpec != null)
+            {
+                _pipeline = pipelineSpec.CreatePipeline();
+            }
+        }
+
+        private void ApplyRigidbodyDefaults()
+        {
+            _rb.mass = Mathf.Max(_rb.mass, carSpec.minMass);
+            RigidbodyCompat.SetLinearDamping(_rb, carSpec.linearDamping);
+            RigidbodyCompat.SetAngularDamping(_rb, carSpec.angularDamping);
+            _rb.useGravity = true;
+            _rb.centerOfMass = carSpec.centerOfMass;
+        }
+
+        private void FixedUpdate()
+        {
+            if (_pipeline == null || _inputProvider == null || carSpec == null)
+                return;
+
+            UpdateState();
+            var ctx = new VehicleContext(_rb, transform, carSpec, Time.fixedDeltaTime);
+            var input = _inputProvider.CurrentInput;
+
+            _pipeline.Tick(input, ref _state, ctx);
+        }
+
+        private void UpdateState()
+        {
+            _state.worldVelocity = RigidbodyCompat.GetVelocity(_rb);
+            _state.localVelocity = transform.InverseTransformDirection(_state.worldVelocity);
+            _state.speed = _state.localVelocity.magnitude;
+            _state.yawRate = _rb.angularVelocity.y;
+        }
+
+        private void OnCollisionEnter(Collision collision)
+        {
+            if (_pipeline == null || carSpec == null)
+                return;
+
+            var ctx = new VehicleContext(_rb, transform, carSpec, Time.fixedDeltaTime);
+            _pipeline.NotifyCollision(collision, ctx, ref _state);
         }
     }
 }
