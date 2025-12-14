@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
 using Vehicle.Core;
+using Vehicle.Specs;
+using System.Reflection;
 
 namespace Vehicle.UI
 {
@@ -10,39 +12,61 @@ namespace Vehicle.UI
         [Header("References")]
         [SerializeField] private VehicleController vehicleController;
         
-        [Header("UI Elements")]
-        [SerializeField] private Text speedText;
-        [SerializeField] private Text forwardSpeedText;
-        [SerializeField] private Text lateralSpeedText;
-        [SerializeField] private Text verticalSpeedText;
-        [SerializeField] private Text yawRateText;
+        [Header("UI Elements - Input")]
         [SerializeField] private Text throttleText;
         [SerializeField] private Text brakeText;
         [SerializeField] private Text steerText;
         
+        [Header("UI Elements - Motion")]
+        [SerializeField] private Text speedText;
+        [SerializeField] private Text sideSpeedText;
+        [SerializeField] private Text yawRateText;
+        [SerializeField] private Text accelerationText;
+        
+        [Header("UI Elements - Forces")]
+        [SerializeField] private Text motorForceText;
+        [SerializeField] private Text dragForceText;
+        [SerializeField] private Text dampingForceText;
+        [SerializeField] private Text netForceText;
+        
+        [Header("UI Elements - Categories")]
+        [SerializeField] private Text inputCategoryText;
+        [SerializeField] private Text motionCategoryText;
+        [SerializeField] private Text forcesCategoryText;
+        
         [Header("Settings")]
-        [SerializeField] private bool showSpeed = true;
-        [SerializeField] private bool showForwardSpeed = true;
-        [SerializeField] private bool showLateralSpeed = true;
-        [SerializeField] private bool showVerticalSpeed = false;
-        [SerializeField] private bool showYawRate = true;
-        [SerializeField] private bool showInput = true;
+        [SerializeField] private bool showForces = true;
         [SerializeField] private float updateInterval = 0.1f;
         
         private float _nextUpdateTime;
-        private VehicleState _lastState;
-        private VehicleInput _lastInput;
+        private float _prevSpeed;
+        private float _prevTime;
+        private CarSpec _cachedCarSpec;
 
         private void Start()
         {
-            // Auto-find VehicleController if not assigned
             if (vehicleController == null)
             {
                 vehicleController = FindObjectOfType<VehicleController>();
             }
             
-            // Create UI elements if not assigned
+            // Cache CarSpec using reflection
+            CacheCarSpec();
+            
             CreateUIElements();
+        }
+
+        private void CacheCarSpec()
+        {
+            if (vehicleController == null) return;
+            
+            // Use reflection to get carSpec (private SerializeField)
+            var field = typeof(VehicleController).GetField("carSpec", 
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            if (field != null)
+            {
+                _cachedCarSpec = field.GetValue(vehicleController) as CarSpec;
+            }
         }
 
         private void Update()
@@ -56,10 +80,6 @@ namespace Vehicle.UI
 
         private void UpdateDisplay()
         {
-            // Get state from VehicleController using reflection or public access
-            // Since VehicleState is private, we'll need to access it through VehicleController
-            // For now, we'll read from Rigidbody directly and calculate
-            
             var rb = vehicleController.GetComponent<Rigidbody>();
             if (rb == null) return;
             
@@ -68,39 +88,70 @@ namespace Vehicle.UI
             Vector3 localVel = transform.InverseTransformDirection(worldVel);
             
             float speed = worldVel.magnitude;
-            float forwardSpeed = localVel.z;
-            float lateralSpeed = localVel.x;
-            float verticalSpeed = localVel.y;
+            float sideSpeed = localVel.x;
             float yawRate = rb.angularVelocity.y;
             
-            // Get input from VehicleInputProvider
+            // Calculate acceleration
+            float acceleration = 0f;
+            if (_prevTime > 0f && Time.fixedDeltaTime > 0f)
+            {
+                acceleration = (speed - _prevSpeed) / Time.fixedDeltaTime;
+            }
+            _prevSpeed = speed;
+            _prevTime = Time.time;
+            
+            // Get input
             var inputProvider = vehicleController.GetComponent<Vehicle.Input.VehicleInputProvider>();
             VehicleInput input = inputProvider != null ? inputProvider.CurrentInput : VehicleInput.Zero;
             
-            // Update UI
-            if (showSpeed && speedText != null)
-                speedText.text = $"Speed: {speed:F2} m/s ({speed * 3.6f:F1} km/h)";
+            // Update Input category
+            if (throttleText != null)
+                throttleText.text = $"  Throttle: {input.throttle:F2}";
+            if (brakeText != null)
+                brakeText.text = $"  Brake: {input.brake:F2}";
+            if (steerText != null)
+                steerText.text = $"  Steer: {input.steer:F2}";
             
-            if (showForwardSpeed && forwardSpeedText != null)
-                forwardSpeedText.text = $"Forward: {forwardSpeed:F2} m/s";
+            // Update Motion category
+            if (speedText != null)
+                speedText.text = $"  Speed: {speed:F2} m/s";
+            if (sideSpeedText != null)
+                sideSpeedText.text = $"  Side Speed: {sideSpeed:F2} m/s";
+            if (yawRateText != null)
+                yawRateText.text = $"  Yaw Rate: {yawRate:F2} rad/s";
+            if (accelerationText != null)
+                accelerationText.text = $"  Acceleration: {acceleration:F2} m/s²";
             
-            if (showLateralSpeed && lateralSpeedText != null)
-                lateralSpeedText.text = $"Lateral: {lateralSpeed:F2} m/s";
-            
-            if (showVerticalSpeed && verticalSpeedText != null)
-                verticalSpeedText.text = $"Vertical: {verticalSpeed:F2} m/s";
-            
-            if (showYawRate && yawRateText != null)
-                yawRateText.text = $"Yaw Rate: {yawRate:F2} rad/s";
-            
-            if (showInput)
+            // Calculate and update Forces
+            if (showForces && _cachedCarSpec != null)
             {
-                if (throttleText != null)
-                    throttleText.text = $"Throttle: {input.throttle:F2}";
-                if (brakeText != null)
-                    brakeText.text = $"Brake: {input.brake:F2}";
-                if (steerText != null)
-                    steerText.text = $"Steer: {input.steer:F2}";
+                float motorForce = input.throttle * _cachedCarSpec.motorForce;
+                
+                float dragForce = 0f;
+                const float airDensity = 1.225f;
+                if (speed > 0.1f && _cachedCarSpec.frontArea > 0f && _cachedCarSpec.dragCoefficient > 0f)
+                {
+                    dragForce = 0.5f * airDensity * _cachedCarSpec.dragCoefficient * 
+                                _cachedCarSpec.frontArea * speed * speed;
+                }
+                
+                float dampingForce = 0f;
+                float linearDamping = RigidbodyCompat.GetLinearDamping(rb);
+                if (speed > 0.001f)
+                {
+                    dampingForce = linearDamping * speed * rb.mass;
+                }
+                
+                float netForce = motorForce - dragForce - dampingForce;
+                
+                if (motorForceText != null)
+                    motorForceText.text = $"  Motor Force: {motorForce:F0} N";
+                if (dragForceText != null)
+                    dragForceText.text = $"  Drag Force: {dragForce:F0} N";
+                if (dampingForceText != null)
+                    dampingForceText.text = $"  Damping Force: {dampingForce:F0} N";
+                if (netForceText != null)
+                    netForceText.text = $"  Net Force: {netForce:F0} N";
             }
         }
 
@@ -130,7 +181,7 @@ namespace Vehicle.UI
             }
             
             // Create container
-            GameObject container = new GameObject("SpeedometerContainer");
+            GameObject container = new GameObject("TelemetryContainer");
             container.transform.SetParent(transform, false);
             
             RectTransform containerRect = container.AddComponent<RectTransform>();
@@ -138,60 +189,71 @@ namespace Vehicle.UI
             containerRect.anchorMax = new Vector2(0, 0);
             containerRect.pivot = new Vector2(0, 0);
             containerRect.anchoredPosition = new Vector2(20, 20);
-            containerRect.sizeDelta = new Vector2(300, 400);
+            containerRect.sizeDelta = new Vector2(350, 600);
             
-            // Create Text elements
             float yOffset = 0;
-            float lineHeight = 30;
+            float lineHeight = 25;
+            float categorySpacing = 15;
             
-            if (showSpeed)
-            {
-                speedText = CreateTextElement(container.transform, "SpeedText", "Speed: 0.00 m/s (0.0 km/h)", 
-                    new Vector2(0, yOffset), 18, Color.white, FontStyle.Bold);
-                yOffset -= lineHeight;
-            }
+            // [INPUT] category
+            inputCategoryText = CreateTextElement(container.transform, "InputCategory", "[INPUT]", 
+                new Vector2(0, yOffset), 16, Color.white, FontStyle.Bold);
+            yOffset -= lineHeight;
             
-            if (showForwardSpeed)
-            {
-                forwardSpeedText = CreateTextElement(container.transform, "ForwardSpeedText", "Forward: 0.00 m/s", 
-                    new Vector2(0, yOffset), 14, Color.green);
-                yOffset -= lineHeight;
-            }
+            throttleText = CreateTextElement(container.transform, "ThrottleText", "  Throttle: 0.00", 
+                new Vector2(0, yOffset), 14, Color.black);
+            yOffset -= lineHeight;
             
-            if (showLateralSpeed)
-            {
-                lateralSpeedText = CreateTextElement(container.transform, "LateralSpeedText", "Lateral: 0.00 m/s", 
-                    new Vector2(0, yOffset), 14, Color.yellow);
-                yOffset -= lineHeight;
-            }
+            brakeText = CreateTextElement(container.transform, "BrakeText", "  Brake: 0.00", 
+                new Vector2(0, yOffset), 14, Color.black);
+            yOffset -= lineHeight;
             
-            if (showVerticalSpeed)
-            {
-                verticalSpeedText = CreateTextElement(container.transform, "VerticalSpeedText", "Vertical: 0.00 m/s", 
-                    new Vector2(0, yOffset), 14, Color.cyan);
-                yOffset -= lineHeight;
-            }
+            steerText = CreateTextElement(container.transform, "SteerText", "  Steer: 0.00", 
+                new Vector2(0, yOffset), 14, Color.black);
+            yOffset -= categorySpacing;
             
-            if (showYawRate)
-            {
-                yawRateText = CreateTextElement(container.transform, "YawRateText", "Yaw Rate: 0.00 rad/s", 
-                    new Vector2(0, yOffset), 14, Color.magenta);
-                yOffset -= lineHeight;
-            }
+            // [MOTION] category
+            motionCategoryText = CreateTextElement(container.transform, "MotionCategory", "[MOTION]", 
+                new Vector2(0, yOffset), 16, Color.white, FontStyle.Bold);
+            yOffset -= lineHeight;
             
-            if (showInput)
+            speedText = CreateTextElement(container.transform, "SpeedText", "  Speed: 0.00 m/s", 
+                new Vector2(0, yOffset), 14, Color.black);
+            yOffset -= lineHeight;
+            
+            sideSpeedText = CreateTextElement(container.transform, "SideSpeedText", "  Side Speed: 0.00 m/s", 
+                new Vector2(0, yOffset), 14, Color.black);
+            yOffset -= lineHeight;
+            
+            yawRateText = CreateTextElement(container.transform, "YawRateText", "  Yaw Rate: 0.00 rad/s", 
+                new Vector2(0, yOffset), 14, Color.black);
+            yOffset -= lineHeight;
+            
+            accelerationText = CreateTextElement(container.transform, "AccelerationText", "  Acceleration: 0.00 m/s²", 
+                new Vector2(0, yOffset), 14, Color.black);
+            yOffset -= categorySpacing;
+            
+            // [FORCES] category
+            if (showForces)
             {
-                yOffset -= 10; // Spacer
-                throttleText = CreateTextElement(container.transform, "ThrottleText", "Throttle: 0.00", 
-                    new Vector2(0, yOffset), 14, new Color(0.2f, 1f, 0.2f));
+                forcesCategoryText = CreateTextElement(container.transform, "ForcesCategory", "[FORCES]", 
+                    new Vector2(0, yOffset), 16, Color.white, FontStyle.Bold);
                 yOffset -= lineHeight;
                 
-                brakeText = CreateTextElement(container.transform, "BrakeText", "Brake: 0.00", 
-                    new Vector2(0, yOffset), 14, new Color(1f, 0.2f, 0.2f));
+                motorForceText = CreateTextElement(container.transform, "MotorForceText", "  Motor Force: 0 N", 
+                    new Vector2(0, yOffset), 14, Color.black);
                 yOffset -= lineHeight;
                 
-                steerText = CreateTextElement(container.transform, "SteerText", "Steer: 0.00", 
-                    new Vector2(0, yOffset), 14, new Color(0.2f, 0.2f, 1f));
+                dragForceText = CreateTextElement(container.transform, "DragForceText", "  Drag Force: 0 N", 
+                    new Vector2(0, yOffset), 14, Color.black);
+                yOffset -= lineHeight;
+                
+                dampingForceText = CreateTextElement(container.transform, "DampingForceText", "  Damping Force: 0 N", 
+                    new Vector2(0, yOffset), 14, Color.black);
+                yOffset -= lineHeight;
+                
+                netForceText = CreateTextElement(container.transform, "NetForceText", "  Net Force: 0 N", 
+                    new Vector2(0, yOffset), 14, Color.black);
             }
         }
 
@@ -206,7 +268,7 @@ namespace Vehicle.UI
             rect.anchorMax = new Vector2(0, 1);
             rect.pivot = new Vector2(0, 1);
             rect.anchoredPosition = position;
-            rect.sizeDelta = new Vector2(280, fontSize + 4);
+            rect.sizeDelta = new Vector2(330, fontSize + 4);
             
             Text text = textObj.AddComponent<Text>();
             text.text = defaultText;
@@ -220,4 +282,3 @@ namespace Vehicle.UI
         }
     }
 }
-
