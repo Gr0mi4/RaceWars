@@ -18,19 +18,25 @@ namespace Vehicle.Modules.DriveModels
         {
             float maxSpeed = ctx.spec != null ? ctx.spec.maxSpeed : 25f;
             
-            // Calculate acceleration: throttle forward, brake backward
+            // Get current velocity in world space and convert to local
+            Vector3 vWorld = RigidbodyCompat.GetVelocity(ctx.rb);
+            Vector3 vLocal = ctx.tr.InverseTransformDirection(vWorld);
+            
+            // Calculate acceleration intent: throttle forward, brake backward
             float accel = input.throttle - input.brake;
+            
+            // Brake-then-reverse logic: if braking while still moving forward, force target to 0
+            if (input.brake > 0.01f && vLocal.z > 0.5f)
+            {
+                // Car is moving forward and user is braking - force stop first
+                accel = 0f;
+            }
+            
             float desiredZ = accel * maxSpeed;
             
             // Determine which blend to use based on pedal input
             float absAccel = Mathf.Abs(accel);
             float blend = absAccel > 0.01f ? _poweredBlend : _coastingBlend;
-            
-            // Get current velocity in world space
-            Vector3 vWorld = RigidbodyCompat.GetVelocity(ctx.rb);
-            
-            // Convert to local space
-            Vector3 vLocal = ctx.tr.InverseTransformDirection(vWorld);
             
             // Only modify forward/backward component (Z), preserve lateral (X) and vertical (Y)
             float blendedZ = Mathf.Lerp(vLocal.z, desiredZ, blend);
