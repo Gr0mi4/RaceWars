@@ -66,7 +66,11 @@ namespace Vehicle.Modules.SteeringModels
             float yawRateMaxBase = ayMax / effectiveVx;
 
             // 3. Friction circle: reduce lateral grip during braking/acceleration
-            float longUsage = Mathf.Clamp01(Mathf.Abs(input.throttle) + Mathf.Abs(input.brake));
+            // Brake has stronger effect on lateral grip than throttle (braking reduces turning more)
+            // Throttle effect is configurable to allow steering while accelerating (more realistic)
+            float brakeUsage = Mathf.Abs(input.brake);
+            float throttleUsage = Mathf.Abs(input.throttle) * _spec.throttleFrictionEffect;
+            float longUsage = Mathf.Clamp01(brakeUsage + throttleUsage);
             float frictionCircleFactor = longUsage * _spec.frictionCircleStrength;
             float latGripFactor = Mathf.Sqrt(Mathf.Max(0f, 1f - frictionCircleFactor * frictionCircleFactor));
             float yawRateMax = yawRateMaxBase * latGripFactor;
@@ -120,3 +124,4 @@ namespace Vehicle.Modules.SteeringModels
         }
     }
 }
+

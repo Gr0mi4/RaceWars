@@ -19,3 +19,4 @@ namespace Vehicle.Modules.SteeringModels
         bool ApplySteering(in VehicleInput input, in VehicleState state, in VehicleContext ctx, out float yawTorque);
     }
 }
+

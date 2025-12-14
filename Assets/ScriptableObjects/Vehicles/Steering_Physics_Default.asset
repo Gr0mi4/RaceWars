@@ -16,8 +16,10 @@ MonoBehaviour:
   maxSteerAngle: 32
   baseMu: 0.75
   frictionCircleStrength: 0.95
+  throttleFrictionEffect: 0.6
   handbrakeGripMultiplier: 0.2
   yawResponseTime: 0.11
   maxYawAccel: 11
   minForwardSpeed: 0.2
   enableDebugLogs: 0
+

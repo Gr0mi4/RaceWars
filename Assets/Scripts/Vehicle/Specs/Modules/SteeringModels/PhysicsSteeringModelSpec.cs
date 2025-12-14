@@ -20,6 +20,9 @@ namespace Vehicle.Specs.Modules.SteeringModels
         [Tooltip("How strongly longitudinal usage (brake/throttle) reduces lateral grip. Driver-style: ~0.9-1.0 for strong coupling")]
         [Range(0.5f, 1.0f)] public float frictionCircleStrength = 0.95f;
         
+        [Tooltip("How much throttle affects friction circle (0.0-1.0). Lower = throttle affects lateral grip less. Driver-style: ~0.5-0.7 allows steering while accelerating")]
+        [Range(0.3f, 1.0f)] public float throttleFrictionEffect = 0.6f;
+        
         [Tooltip("Grip reduction multiplier when handbrake is active. Driver-style: ~0.2 for controlled slides")]
         [Range(0.05f, 0.5f)] public float handbrakeGripMultiplier = 0.2f;
 
@@ -48,6 +51,7 @@ namespace Vehicle.Specs.Modules.SteeringModels
             maxSteerAngle = Mathf.Clamp(maxSteerAngle, 20f, 50f);
             baseMu = Mathf.Clamp(baseMu, 0.5f, 1.5f);
             frictionCircleStrength = Mathf.Clamp(frictionCircleStrength, 0.5f, 1.0f);
+            throttleFrictionEffect = Mathf.Clamp(throttleFrictionEffect, 0.3f, 1.0f);
             handbrakeGripMultiplier = Mathf.Clamp(handbrakeGripMultiplier, 0.05f, 0.5f);
             yawResponseTime = Mathf.Clamp(yawResponseTime, 0.05f, 0.3f);
             maxYawAccel = Mathf.Clamp(maxYawAccel, 5f, 25f);
@@ -57,3 +61,4 @@ namespace Vehicle.Specs.Modules.SteeringModels
         }
     }
 }
+
