@@ -19,3 +19,5 @@ MonoBehaviour:
   motorForce: 12000
   steerStrength: 120
   maxSpeed: 25
+  frontArea: 2
+  dragCoefficient: 0.35

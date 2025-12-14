@@ -29,16 +29,20 @@ namespace Vehicle.Modules
                 grip *= _handbrakeGripMultiplier;
             }
             
-            // Apply exponential decay to lateral component (X)
-            // vLocal.x *= exp(-grip * dt)
-            float decayFactor = Mathf.Exp(-grip * ctx.dt);
-            vLocal.x *= decayFactor;
-            
-            // Y (vertical) and Z (forward/backward) remain unchanged
-            
-            // Convert back to world space
-            Vector3 vWorldNew = ctx.tr.TransformDirection(vLocal);
-            RigidbodyCompat.SetVelocity(ctx.rb, vWorldNew);
+            // Apply lateral grip as a force instead of directly setting velocity
+            // This works with both Velocity and Force drive modes
+            if (Mathf.Abs(vLocal.x) > 0.001f && grip > 0f)
+            {
+                // Calculate lateral velocity in world space
+                Vector3 lateralVelocity = ctx.Right * vLocal.x;
+                
+                // Apply damping force: F = -mass * grip * velocity
+                // This creates exponential decay: v(t) = v0 * exp(-grip * t)
+                float mass = ctx.rb.mass;
+                Vector3 lateralForce = -lateralVelocity * (mass * grip);
+                
+                ctx.rb.AddForce(lateralForce, ForceMode.Force);
+            }
         }
     }
 }

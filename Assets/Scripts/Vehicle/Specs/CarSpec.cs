@@ -15,5 +15,9 @@ namespace Vehicle.Specs
         [Min(0f)] public float motorForce = 12000f;
         [Min(0f)] public float steerStrength = 120f;
         [Min(0f)] public float maxSpeed = 25f;
+
+        [Header("Aerodynamics")]
+        [Range(0.1f, 10f)] public float frontArea = 2.0f;
+        [Range(0.1f, 2.0f)] public float dragCoefficient = 0.35f;
     }
 }

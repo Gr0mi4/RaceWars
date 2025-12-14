@@ -20,24 +20,27 @@ namespace Vehicle.Modules
             if (maxSpeed <= 0f) return;
 
             Vector3 v = RigidbodyCompat.GetVelocity(ctx.rb);
+            Vector3 velocityToCheck = _flatOnly ? new Vector3(v.x, 0f, v.z) : v;
+            float speed = velocityToCheck.magnitude;
 
-            if (_flatOnly)
-            {
-                Vector3 flat = new Vector3(v.x, 0f, v.z);
-                float m = flat.magnitude;
-                if (m <= maxSpeed) return;
+            if (speed <= maxSpeed) return;
 
-                Vector3 limited = flat / m * maxSpeed;
-                RigidbodyCompat.SetVelocity(ctx.rb, new Vector3(limited.x, v.y, limited.z));
-            }
-            else
-            {
-                float m = v.magnitude;
-                if (m <= maxSpeed) return;
-
-                Vector3 limited = v / m * maxSpeed;
-                RigidbodyCompat.SetVelocity(ctx.rb, limited);
-            }
+            // Apply braking force instead of directly limiting velocity
+            // This works with both Velocity and Force drive modes
+            // Force is proportional to speed excess: F = -k * (speed - maxSpeed) * mass * direction
+            float speedExcess = speed - maxSpeed;
+            float mass = ctx.rb.mass;
+            
+            // Brake force coefficient: higher value = stronger braking
+            // Adjusted to quickly limit speed without being too aggressive
+            const float brakeCoefficient = 50f;
+            float brakeForce = brakeCoefficient * speedExcess * mass;
+            
+            // Apply force opposite to velocity direction
+            Vector3 brakeDirection = -velocityToCheck.normalized;
+            Vector3 brakeForceVector = brakeDirection * brakeForce;
+            
+            ctx.rb.AddForce(brakeForceVector, ForceMode.Force);
         }
     }
 }
