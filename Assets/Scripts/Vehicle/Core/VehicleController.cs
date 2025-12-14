@@ -6,21 +6,25 @@ namespace Vehicle.Core
 {
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Rigidbody))]
-    [RequireComponent(typeof(VehicleInputProvider))]
     public sealed class VehicleController : MonoBehaviour
     {
         [SerializeField] private VehiclePipelineSpec pipelineSpec;
         [SerializeField] private CarSpec carSpec;
+        [SerializeField] private VehicleInputProvider inputProvider;
 
         private VehiclePipeline _pipeline;
-        private VehicleInputProvider _inputProvider;
         private Rigidbody _rb;
         private VehicleState _state;
 
         private void Awake()
         {
             _rb = GetComponent<Rigidbody>();
-            _inputProvider = GetComponent<VehicleInputProvider>();
+            
+            // Use serialized field if assigned, otherwise try to get component
+            if (inputProvider == null)
+            {
+                inputProvider = GetComponent<VehicleInputProvider>();
+            }
 
             if (carSpec != null)
             {
@@ -44,12 +48,12 @@ namespace Vehicle.Core
 
         private void FixedUpdate()
         {
-            if (_pipeline == null || _inputProvider == null || carSpec == null)
+            if (_pipeline == null || inputProvider == null || carSpec == null)
                 return;
 
             UpdateState();
             var ctx = new VehicleContext(_rb, transform, carSpec, Time.fixedDeltaTime);
-            var input = _inputProvider.CurrentInput;
+            var input = inputProvider.CurrentInput;
 
             _pipeline.Tick(input, ref _state, ctx);
         }
