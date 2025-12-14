@@ -25,10 +25,17 @@ namespace Vehicle.Modules.DriveModels
             // Calculate acceleration intent: throttle forward, brake backward
             float accel = input.throttle - input.brake;
             
-            // Brake-then-reverse logic: if braking while still moving forward, force target to 0
+            // Brake-then-reverse logic (symmetric):
+            // If moving forward and braking, force stop first before reversing
             if (input.brake > 0.01f && vLocal.z > 0.5f)
             {
                 // Car is moving forward and user is braking - force stop first
+                accel = 0f;
+            }
+            // If moving backward and throttling forward, force stop first before going forward
+            else if (input.throttle > 0.01f && vLocal.z < -0.5f)
+            {
+                // Car is moving backward and user is throttling forward - force stop first
                 accel = 0f;
             }
             
