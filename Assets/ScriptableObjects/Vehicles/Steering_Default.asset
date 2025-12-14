@@ -12,5 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ff2e2d7f5eff9f84eb74dbebffa0f9e6, type: 3}
   m_Name: Steering_Default
   m_EditorClassIdentifier: Assembly-CSharp::Vehicle.Specs.Modules.SteeringModuleSpec
+  steeringMode: 1
   minSpeedToSteer: 0.5
   strengthMultiplier: 1
+  physicsModelSpec: {fileID: 11400000, guid: 0000000000000000e000000000000000, type: 2}
