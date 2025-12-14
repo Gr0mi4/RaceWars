@@ -9,17 +9,16 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0000000000000000d000000000000000, type: 3}
-  m_Name: Steering_Physics_Default
-  m_EditorClassIdentifier: Assembly-CSharp::Vehicle.Specs.Modules.SteeringModels.PhysicsSteeringModelSpec 
+  m_Script: {fileID: 11500000, guid: df2621755dc086b478defea9f5e13683, type: 3}
+  m_Name: PhysicsSteeringModelSpec
+  m_EditorClassIdentifier: Assembly-CSharp::Vehicle.Specs.Modules.SteeringModels.PhysicsSteeringModelSpec
   wheelbase: 2.8
   maxSteerAngle: 32
   baseMu: 0.75
   frictionCircleStrength: 0.95
-  throttleFrictionEffect: 0.6
+  throttleFrictionEffect: 0.1
   handbrakeGripMultiplier: 0.2
   yawResponseTime: 0.11
   maxYawAccel: 11
   minForwardSpeed: 0.2
   enableDebugLogs: 0
-

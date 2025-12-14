@@ -15,4 +15,4 @@ MonoBehaviour:
   steeringMode: 1
   minSpeedToSteer: 0.5
   strengthMultiplier: 1
-  physicsModelSpec: {fileID: 11400000, guid: 0000000000000000e000000000000000, type: 2}
+  physicsModelSpec: {fileID: 11400000, guid: d849f4b6f985ac341bedcd89bc4ea93e, type: 2}

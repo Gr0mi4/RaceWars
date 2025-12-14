@@ -15,13 +15,13 @@ namespace Vehicle.Specs.Modules.SteeringModels
 
         [Header("Tire Grip")]
         [Tooltip("Base friction coefficient (μ). Driver-style: ~0.7-0.8 for realistic tire limits")]
-        [Range(0.5f, 1.5f)] public float baseMu = 0.75f;
+        [Range(1f, 3f)] public float baseMu = 1.5f;
         
         [Tooltip("How strongly longitudinal usage (brake/throttle) reduces lateral grip. Driver-style: ~0.9-1.0 for strong coupling")]
         [Range(0.5f, 1.0f)] public float frictionCircleStrength = 0.95f;
         
         [Tooltip("How much throttle affects friction circle (0.0-1.0). Lower = throttle affects lateral grip less. Driver-style: ~0.5-0.7 allows steering while accelerating")]
-        [Range(0.3f, 1.0f)] public float throttleFrictionEffect = 0.6f;
+        [Range(0.01f, 0.3f)] public float throttleFrictionEffect = 0.1f;
         
         [Tooltip("Grip reduction multiplier when handbrake is active. Driver-style: ~0.2 for controlled slides")]
         [Range(0.05f, 0.5f)] public float handbrakeGripMultiplier = 0.2f;
@@ -49,9 +49,9 @@ namespace Vehicle.Specs.Modules.SteeringModels
             // Validate and clamp parameters
             wheelbase = Mathf.Max(2.0f, wheelbase);
             maxSteerAngle = Mathf.Clamp(maxSteerAngle, 20f, 50f);
-            baseMu = Mathf.Clamp(baseMu, 0.5f, 1.5f);
+            baseMu = Mathf.Clamp(baseMu, 0.1f, 3f);
             frictionCircleStrength = Mathf.Clamp(frictionCircleStrength, 0.5f, 1.0f);
-            throttleFrictionEffect = Mathf.Clamp(throttleFrictionEffect, 0.3f, 1.0f);
+            throttleFrictionEffect = Mathf.Clamp(throttleFrictionEffect, 0.01f, 0.3f);
             handbrakeGripMultiplier = Mathf.Clamp(handbrakeGripMultiplier, 0.05f, 0.5f);
             yawResponseTime = Mathf.Clamp(yawResponseTime, 0.05f, 0.3f);
             maxYawAccel = Mathf.Clamp(maxYawAccel, 5f, 25f);
