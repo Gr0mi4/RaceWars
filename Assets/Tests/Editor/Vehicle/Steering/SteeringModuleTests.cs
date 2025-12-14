@@ -3,6 +3,7 @@ using UnityEngine;
 using Vehicle.Core;
 using Vehicle.Modules;
 using Vehicle.Modules.SteeringModels;
+using Vehicle.Specs;
 using Vehicle.Specs.Modules.SteeringModels;
 
 namespace Vehicle.Tests.Steering
