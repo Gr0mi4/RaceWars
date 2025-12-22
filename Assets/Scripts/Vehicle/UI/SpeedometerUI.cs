@@ -37,6 +37,7 @@ namespace Vehicle.UI
         [Header("Settings")]
         [SerializeField] private bool showForces = true;
         [SerializeField] private float updateInterval = 0.1f;
+        [SerializeField] private float minScaleFactor = 0.7f;
         
         private float _nextUpdateTime;
         private float _prevSpeed;
@@ -232,12 +233,36 @@ namespace Vehicle.UI
             }
             
             // Add CanvasScaler for proper scaling
-            if (GetComponent<CanvasScaler>() == null)
+            CanvasScaler scaler = GetComponent<CanvasScaler>();
+            if (scaler == null)
             {
-                var scaler = gameObject.AddComponent<CanvasScaler>();
-                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-                scaler.referenceResolution = new Vector2(1920, 1080);
+                scaler = gameObject.AddComponent<CanvasScaler>();
             }
+            
+            // Calculate current screen resolution
+            float screenWidth = Screen.width;
+            float screenHeight = Screen.height;
+            float referenceWidth = 1920f;
+            float referenceHeight = 1080f;
+            
+            // Calculate scale based on width and height
+            float scaleX = screenWidth / referenceWidth;
+            float scaleY = screenHeight / referenceHeight;
+            float scale = Mathf.Min(scaleX, scaleY);
+            
+            // Apply minimum scale to prevent UI from becoming too small
+            scale = Mathf.Max(scale, minScaleFactor);
+            
+            // Adjust reference resolution to achieve desired scale
+            Vector2 adjustedReference = new Vector2(
+                referenceWidth / scale,
+                referenceHeight / scale
+            );
+            
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = adjustedReference;
+            scaler.matchWidthOrHeight = 0.5f;
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             
             // Add GraphicRaycaster
             if (GetComponent<GraphicRaycaster>() == null)
