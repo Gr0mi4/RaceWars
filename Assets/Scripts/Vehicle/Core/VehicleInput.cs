@@ -1,12 +1,33 @@
 namespace Vehicle.Core
 {
+    /// <summary>
+    /// Represents input values for vehicle control. All values are normalized to 0-1 or -1 to 1 ranges.
+    /// </summary>
     public struct VehicleInput
     {
-        public float throttle;   // 0..1
-        public float brake;      // 0..1 (reserved)
-        public float steer;      // -1..1
-        public float handbrake;  // 0..1 (reserved)
+        /// <summary>
+        /// Throttle input value. Range: 0 (no throttle) to 1 (full throttle).
+        /// </summary>
+        public float throttle;
+        
+        /// <summary>
+        /// Brake input value. Range: 0 (no brake) to 1 (full brake). Currently reserved for future use.
+        /// </summary>
+        public float brake;
+        
+        /// <summary>
+        /// Steering input value. Range: -1 (full left) to 1 (full right), 0 is straight.
+        /// </summary>
+        public float steer;
+        
+        /// <summary>
+        /// Handbrake input value. Range: 0 (no handbrake) to 1 (full handbrake). Currently reserved for future use.
+        /// </summary>
+        public float handbrake;
 
+        /// <summary>
+        /// Returns a VehicleInput with all values set to zero (no input).
+        /// </summary>
         public static VehicleInput Zero => new VehicleInput();
     }
 }

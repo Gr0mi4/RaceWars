@@ -10,7 +10,7 @@ namespace Vehicle.Tests.Steering
 {
     /// <summary>
     /// Unit tests for SteeringModule.
-    /// Tests both legacy and physics modes.
+    /// Tests physics-based steering mode.
     /// </summary>
     [TestFixture]
     public class SteeringModuleTests
@@ -115,56 +115,6 @@ namespace Vehicle.Tests.Steering
             Assert.AreEqual(initialAngularVelocity.y, finalAngularVelocity.y, 0.001f);
 
             Object.DestroyImmediate(spec);
-        }
-
-        [Test]
-        public void SteeringModule_LegacyMode_AppliesRotation()
-        {
-            // Arrange
-            var module = new SteeringModule(0.5f, 1f); // Legacy mode
-            var input = new VehicleInput { steer = 1f };
-            var state = new VehicleState
-            {
-                speed = 10f, // Above minSpeedToSteer
-                localVelocity = new Vector3(0f, 0f, 10f),
-                yawRate = 0f
-            };
-            var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f);
-
-            Quaternion initialRotation = _transform.rotation;
-
-            // Act
-            module.Tick(input, ref state, ctx);
-
-            // Assert
-            Quaternion finalRotation = _transform.rotation;
-            // Rotation should have changed
-            Assert.AreNotEqual(initialRotation, finalRotation);
-        }
-
-        [Test]
-        public void SteeringModule_LegacyMode_LowSpeed_DoesNotApplyRotation()
-        {
-            // Arrange
-            var module = new SteeringModule(0.5f, 1f); // Legacy mode, minSpeed = 0.5
-            var input = new VehicleInput { steer = 1f };
-            var state = new VehicleState
-            {
-                speed = 0.3f, // Below minSpeedToSteer
-                localVelocity = new Vector3(0f, 0f, 0.3f),
-                yawRate = 0f
-            };
-            var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f);
-
-            Quaternion initialRotation = _transform.rotation;
-
-            // Act
-            module.Tick(input, ref state, ctx);
-
-            // Assert
-            Quaternion finalRotation = _transform.rotation;
-            // Rotation should not change
-            Assert.AreEqual(initialRotation, finalRotation);
         }
 
         [Test]

@@ -6,51 +6,39 @@ using Vehicle.Specs.Modules.SteeringModels;
 
 namespace Vehicle.Specs.Modules
 {
+    /// <summary>
+    /// Specification for the SteeringModule. Configures the physics-based steering model.
+    /// </summary>
     [CreateAssetMenu(menuName = "Vehicle/Modules/Steering", fileName = "SteeringModuleSpec")]
     public sealed class SteeringModuleSpec : Vehicle.Specs.VehicleModuleSpec
     {
-        public enum SteeringMode
-        {
-            Legacy,     // Old direct rotation method (deprecated)
-            Physics     // New physics-based steering model
-        }
-
-        [Header("Steering Mode")]
-        [Tooltip("Legacy: Old direct rotation (deprecated). Physics: New physics-based model with grip limits.")]
-        public SteeringMode steeringMode = SteeringMode.Physics;
-
-        [Header("Legacy Mode (Deprecated)")]
-        [Tooltip("Legacy mode only. Minimum speed to enable steering.")]
-        [Min(0f)] public float minSpeedToSteer = 0.5f;
-        
-        [Tooltip("Legacy mode only. Strength multiplier for steering.")]
-        [Range(0.1f, 3f)] public float strengthMultiplier = 1f;
-
-        [Header("Physics Mode")]
-        [Tooltip("Physics steering model specification. Required for Physics mode.")]
+        [Header("Physics Steering Model")]
+        /// <summary>
+        /// Physics steering model specification. Required for steering to work.
+        /// </summary>
+        [Tooltip("Physics steering model specification. Required.")]
         public PhysicsSteeringModelSpec physicsModelSpec;
 
+        /// <summary>
+        /// Creates a SteeringModule with the configured physics steering model.
+        /// </summary>
+        /// <returns>A new SteeringModule instance, or null if physicsModelSpec is not assigned or creation fails.</returns>
         public override IVehicleModule CreateModule()
         {
-            switch (steeringMode)
+            if (physicsModelSpec == null)
             {
-                case SteeringMode.Legacy:
-                    Debug.LogWarning("[SteeringModuleSpec] Using legacy steering mode. Consider migrating to Physics mode for better control.");
-                    return new SteeringModule(minSpeedToSteer, strengthMultiplier);
-
-                case SteeringMode.Physics:
-                    if (physicsModelSpec == null)
-                    {
-                        Debug.LogError("[SteeringModuleSpec] Physics mode requires physicsModelSpec. Falling back to legacy mode.");
-                        return new SteeringModule(minSpeedToSteer, strengthMultiplier);
-                    }
-                    ISteeringModel model = physicsModelSpec.CreateModel();
-                    return new SteeringModule(model);
-
-                default:
-                    Debug.LogError($"[SteeringModuleSpec] Unknown steering mode: {steeringMode}. Using legacy mode.");
-                    return new SteeringModule(minSpeedToSteer, strengthMultiplier);
+                Debug.LogError("[SteeringModuleSpec] Physics steering model spec is required but not assigned. Steering will be disabled.");
+                return null;
             }
+
+            ISteeringModel model = physicsModelSpec.CreateModel();
+            if (model == null)
+            {
+                Debug.LogError("[SteeringModuleSpec] Failed to create steering model. Steering will be disabled.");
+                return null;
+            }
+
+            return new SteeringModule(model);
         }
     }
 }

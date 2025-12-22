@@ -13,9 +13,8 @@ This system implements physics-based steering with Driver-style realistic handli
 ### 1. After Unity imports the new scripts:
 
 1. Open `Assets/ScriptableObjects/Vehicles/Steering_Default.asset` in the Inspector
-2. Set `Steering Mode` to `Physics`
-3. Assign `Steering_Physics_Default.asset` to the `Physics Model Spec` field
-4. The system will now use physics-based steering
+2. Assign `Steering_Physics_Default.asset` to the `Physics Model Spec` field
+3. The system will now use physics-based steering
 
 ### 2. Tuning Parameters (in Steering_Physics_Default.asset):
 
@@ -39,7 +38,7 @@ Enable `enableDebugLogs` in `Steering_Physics_Default.asset` to see detailed ste
 Comprehensive unit tests are available in `Assets/Tests/Editor/Vehicle/Steering/`:
 
 - **PhysicsSteeringModelTests.cs**: Tests bicycle model, grip limits, friction circle, handbrake effects
-- **SteeringModuleTests.cs**: Tests SteeringModule in both legacy and physics modes
+- **SteeringModuleTests.cs**: Tests SteeringModule with physics-based steering
 - **SteeringEdgeCasesTests.cs**: Tests edge cases (zero speed, invalid parameters, extreme values)
 
 Run tests via Unity Test Runner (Window → General → Test Runner).
@@ -60,7 +59,7 @@ Run tests via Unity Test Runner (Window → General → Test Runner).
 - `ISteeringModel`: Interface for steering models
 - `PhysicsSteeringModel`: Implementation with bicycle model and grip limits
 - `PhysicsSteeringModelSpec`: ScriptableObject with tuning parameters
-- `SteeringModule`: Applies steering via torque (supports both legacy and physics modes)
+- `SteeringModule`: Applies steering via torque using physics-based steering models
 
 ## Module Order
 

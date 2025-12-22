@@ -3,8 +3,19 @@ using Vehicle.Core;
 
 namespace Vehicle.Input
 {
+    /// <summary>
+    /// Input source implementation using Unity's legacy Input system.
+    /// Reads input from keyboard and gamepad using Input.GetAxisRaw and Input.GetKey.
+    /// </summary>
     public sealed class UnityInputSource : IInputSource
     {
+        /// <summary>
+        /// Reads input from Unity's Input system.
+        /// Vertical axis: positive = throttle, negative = brake/reverse.
+        /// Horizontal axis: left = -1, right = 1.
+        /// Space key: handbrake.
+        /// </summary>
+        /// <returns>Current vehicle input values.</returns>
         public VehicleInput ReadInput()
         {
             float v = Mathf.Clamp(UnityEngine.Input.GetAxisRaw("Vertical"), -1f, 1f);
