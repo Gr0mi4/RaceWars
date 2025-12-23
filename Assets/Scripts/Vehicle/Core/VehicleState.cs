@@ -26,5 +26,29 @@ namespace Vehicle.Core
         /// Current yaw rate (angular velocity around Y axis) in radians per second.
         /// </summary>
         public float yawRate;
+
+        /// <summary>
+        /// Current engine RPM (revolutions per minute of the crankshaft). Set by engine/gearbox modules.
+        /// This is the rotational speed of the engine crankshaft.
+        /// </summary>
+        public float engineRPM;
+
+        /// <summary>
+        /// Current wheel angular velocity in radians per second. Set by drive modules.
+        /// This is the rotational speed of the wheels. Related to engine RPM through gearbox.
+        /// Formula: ω_wheel = ω_engine / (gearRatio × finalDriveRatio)
+        /// </summary>
+        public float wheelAngularVelocity;
+
+        /// <summary>
+        /// Current gear index. -1 = reverse, 0 = neutral, 1+ = forward gears (1st, 2nd, etc.).
+        /// Set by gearbox modules.
+        /// </summary>
+        public int currentGear;
+
+        /// <summary>
+        /// Wheel radius in meters. Set by wheel modules.
+        /// </summary>
+        public float wheelRadius;
     }
 }
