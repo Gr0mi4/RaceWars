@@ -29,7 +29,6 @@ namespace Vehicle.Tests.Steering
             _transform = _gameObject.transform;
 
             _carSpec = ScriptableObject.CreateInstance<CarSpec>();
-            _carSpec.steerStrength = 120f;
         }
 
         [TearDown]
