@@ -12,12 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: de4855cdf9783ee46919a41f12cc64dc, type: 3}
   m_Name: CarSpec_Default
   m_EditorClassIdentifier: Assembly-CSharp::Vehicle.Specs.CarSpec
-  minMass: 800
+  minMass: 1200
   linearDamping: 0.05
   angularDamping: 0.5
   centerOfMass: {x: 0, y: -0.4, z: 0}
-  motorForce: 12000
-  steerStrength: 120
-  maxSpeed: 25
+  engineSpec: {fileID: 11400000, guid: c2cc44e6cf6194975b28371b0eaf182e, type: 2}
+  gearboxSpec: {fileID: 11400000, guid: f49d23c7f15ea4f80ad96e52ad521be9, type: 2}
+  wheelSpec: {fileID: 11400000, guid: c071f3c5c29dd4236bf1ee9ffe7fdd58, type: 2}
   frontArea: 2
   dragCoefficient: 0.35

@@ -26,6 +26,18 @@ namespace Vehicle.Core
         public float handbrake;
 
         /// <summary>
+        /// Shift up input. 1 when shift up is pressed, 0 otherwise.
+        /// Used for manual gear shifting.
+        /// </summary>
+        public float shiftUp;
+
+        /// <summary>
+        /// Shift down input. 1 when shift down is pressed, 0 otherwise.
+        /// Used for manual gear shifting.
+        /// </summary>
+        public float shiftDown;
+
+        /// <summary>
         /// Returns a VehicleInput with all values set to zero (no input).
         /// </summary>
         public static VehicleInput Zero => new VehicleInput();

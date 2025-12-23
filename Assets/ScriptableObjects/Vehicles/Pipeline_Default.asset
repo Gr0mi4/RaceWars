@@ -15,8 +15,6 @@ MonoBehaviour:
   modules:
   - {fileID: 11400000, guid: 2d1d3758437eb4e4bbf1eb3e76a6cf06, type: 2}
   - {fileID: 11400000, guid: b60109f434bfb5b4185830b55e65cc5e, type: 2}
-  - {fileID: 11400000, guid: 0000000000000000, type: 2}
   - {fileID: 11400000, guid: 8c6f085dae490fe4db98b71db9e38dde, type: 2}
   - {fileID: 11400000, guid: d551e6c777ef3c54bafb394c239ee8cb, type: 2}
-  - {fileID: 11400000, guid: eb1f52ae0a31c9b46bd845291a4964f4, type: 2}
   - {fileID: 11400000, guid: 409cb2a2000035845a1feee483cddf0f, type: 2}

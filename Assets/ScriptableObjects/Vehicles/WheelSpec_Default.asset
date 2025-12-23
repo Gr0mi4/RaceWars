@@ -9,7 +9,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3343e41b3738ae349846071d79444369, type: 3}
-  m_Name: Drive_Default
-  m_EditorClassIdentifier: Assembly-CSharp::Vehicle.Specs.Modules.DriveModuleSpec
-  engineForceMultiplier: 1
+  m_Script: {fileID: 11500000, guid: cd3fc2dc5dc8b48ceadaf83225388d0c, type: 3}
+  m_Name: WheelSpec_Default
+  m_EditorClassIdentifier: Assembly-CSharp::Vehicle.Specs.WheelSpec
+  wheelRadius: 0.3
