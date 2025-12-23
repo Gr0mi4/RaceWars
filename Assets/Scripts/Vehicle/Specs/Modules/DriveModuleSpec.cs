@@ -11,55 +11,25 @@ namespace Vehicle.Specs.Modules
     [CreateAssetMenu(menuName = "Vehicle/Modules/Drive", fileName = "DriveModuleSpec")]
     public sealed class DriveModuleSpec : Vehicle.Specs.VehicleModuleSpec
     {
+        [Header("Engine Configuration")]
         /// <summary>
-        /// Drive mode determines how forces are applied to the vehicle.
+        /// Optional multiplier for the calculated engine force. Default is 1.0.
+        /// Note: EngineSpec and GearboxSpec are automatically taken from CarSpec (no need to specify here).
         /// </summary>
-        public enum DriveMode
-        {
-            /// <summary>
-            /// Velocity-based driving with direct velocity interpolation (arcade-style).
-            /// </summary>
-            Velocity,
-            /// <summary>
-            /// Force-based driving using AddForce (realistic physics).
-            /// </summary>
-            Force
-        }
+        [Range(0.1f, 3f)]
+        [Tooltip("Multiplier for engine force. Engine/Gearbox specs come from CarSpec.")]
+        public float engineForceMultiplier = 1f;
 
         /// <summary>
-        /// The drive mode to use. Force provides realistic physics, Velocity provides arcade-style control.
-        /// </summary>
-        public DriveMode driveMode = DriveMode.Force;
-        
-        [Header("Force Mode")]
-        /// <summary>
-        /// Multiplier for the base motor force from CarSpec. Only used in Force mode.
-        /// </summary>
-        [Range(0.1f, 3f)] public float motorForceMultiplier = 1f;
-        
-        [Header("Velocity Mode")]
-        /// <summary>
-        /// Blend rate when throttle or brake is applied. Higher = faster response. Only used in Velocity mode.
-        /// </summary>
-        [Range(0.01f, 0.5f)] public float poweredBlend = 0.25f;
-        
-        /// <summary>
-        /// Blend rate when coasting (no input). Lower = more inertia. Only used in Velocity mode.
-        /// </summary>
-        [Range(0.001f, 0.2f)] public float coastingBlend = 0.02f;
-
-        /// <summary>
-        /// Creates a DriveModule with the configured drive model.
+        /// Creates a DriveModule with EngineDriveModel.
+        /// Engine and gearbox specs are obtained from CarSpec at runtime.
         /// </summary>
         /// <returns>A new DriveModule instance.</returns>
         public override IVehicleModule CreateModule()
         {
-            IDriveModel model = driveMode switch
-            {
-                DriveMode.Force => new ForceDriveModel(motorForceMultiplier),
-                DriveMode.Velocity => new VelocityDriveModel(poweredBlend, coastingBlend),
-                _ => new ForceDriveModel(motorForceMultiplier)
-            };
+            // EngineSpec and GearboxSpec are taken from CarSpec via VehicleContext
+            // No need to specify them here - this keeps configuration centralized in CarSpec
+            IDriveModel model = new EngineDriveModel(engineForceMultiplier);
             return new DriveModule(model);
         }
     }

@@ -12,8 +12,8 @@ namespace Vehicle.Modules.DriveModels
         /// Applies driving forces to the vehicle based on throttle input.
         /// </summary>
         /// <param name="input">Current vehicle input containing throttle value.</param>
-        /// <param name="state">Current vehicle state.</param>
+        /// <param name="state">Current vehicle state (can be modified by the drive model).</param>
         /// <param name="ctx">Vehicle context containing rigidbody and specifications.</param>
-        void ApplyDrive(in VehicleInput input, in VehicleState state, in VehicleContext ctx);
+        void ApplyDrive(in VehicleInput input, ref VehicleState state, in VehicleContext ctx);
     }
 }

@@ -5,7 +5,7 @@ namespace Vehicle.Modules
 {
     /// <summary>
     /// Module that applies driving forces to the vehicle based on throttle input.
-    /// Uses a drive model (Force or Velocity) to determine how forces are applied.
+    /// Uses EngineDriveModel to apply realistic engine-based forces.
     /// </summary>
     public sealed class DriveModule : IVehicleModule
     {
@@ -14,7 +14,7 @@ namespace Vehicle.Modules
         /// <summary>
         /// Initializes a new instance of the DriveModule with the specified drive model.
         /// </summary>
-        /// <param name="driveModel">The drive model to use for applying forces (e.g., ForceDriveModel or VelocityDriveModel).</param>
+        /// <param name="driveModel">The drive model to use for applying forces (e.g., EngineDriveModel).</param>
         public DriveModule(IDriveModel driveModel)
         {
             _driveModel = driveModel;
@@ -28,7 +28,7 @@ namespace Vehicle.Modules
         /// <param name="ctx">Vehicle context containing rigidbody, transform, and specifications.</param>
         public void Tick(in VehicleInput input, ref VehicleState state, in VehicleContext ctx)
         {
-            _driveModel?.ApplyDrive(input, state, ctx);
+            _driveModel?.ApplyDrive(input, ref state, ctx);
         }
     }
 }
