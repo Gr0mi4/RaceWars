@@ -30,21 +30,28 @@ namespace Vehicle.Specs
         /// </summary>
         public Vector3 centerOfMass = new Vector3(0f, -0.4f, 0f);
 
-        [Header("Tuning")]
+
+        [Header("Engine System")]
         /// <summary>
-        /// Base motor force in Newtons. Used by ForceDriveModel to calculate driving force.
+        /// Engine specification containing power/torque curves and RPM characteristics.
+        /// Required for engine-based drive system.
         /// </summary>
-        [Min(0f)] public float motorForce = 12000f;
-        
+        [Tooltip("Engine specification. Required for engine-based drive system.")]
+        public EngineSpec engineSpec;
+
         /// <summary>
-        /// Base steering strength. Used by legacy steering systems (deprecated in favor of physics-based steering).
+        /// Gearbox specification containing gear ratios and transmission settings.
+        /// Required for engine-based drive system.
         /// </summary>
-        [Min(0f)] public float steerStrength = 120f;
-        
+        [Tooltip("Gearbox specification. Required for engine-based drive system.")]
+        public GearboxSpec gearboxSpec;
+
         /// <summary>
-        /// Maximum speed limit in meters per second. Used by SpeedLimiterModule.
+        /// Wheel specification containing wheel parameters.
+        /// Optional, can be used by WheelModule or EngineDriveModel.
         /// </summary>
-        [Min(0f)] public float maxSpeed = 25f;
+        [Tooltip("Wheel specification. Optional, used by WheelModule or EngineDriveModel.")]
+        public WheelSpec wheelSpec;
 
         [Header("Aerodynamics")]
         /// <summary>
