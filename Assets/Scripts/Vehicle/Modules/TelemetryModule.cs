@@ -43,19 +43,15 @@ namespace Vehicle.Modules
             _prevSpeed = speed;
             _prevTime = Time.time;
 
-            // Calculate forces
-            float motorForce = 0f;
+            // Calculate engine-based forces (if engine spec is available)
+            float wheelForce = 0f;
             float dragForce = 0f;
             float dampingForce = 0f;
             float netForce = 0f;
 
             if (ctx.spec != null)
             {
-                // Motor Force (assuming Force mode - throttle * motorForce)
-                motorForce = input.throttle * ctx.spec.motorForce;
-
                 // Aerodynamic Drag Force: F = 0.5 * ρ * Cd * A * v²
-                // Using standard air density 1.225 kg/m³ (can be adjusted if needed)
                 const float airDensity = 1.225f;
                 if (speed > 0.1f && ctx.spec.frontArea > 0f && ctx.spec.dragCoefficient > 0f)
                 {
@@ -63,7 +59,6 @@ namespace Vehicle.Modules
                 }
 
                 // Damping Force: F = -damping * velocity * mass
-                // Unity's linearDamping applies: F = -drag * velocity
                 float linearDamping = RigidbodyCompat.GetLinearDamping(ctx.rb);
                 if (speed > 0.001f)
                 {
@@ -71,30 +66,136 @@ namespace Vehicle.Modules
                 }
             }
 
-            // Net Force (motor - drag - damping)
-            netForce = motorForce - dragForce - dampingForce;
+            // Calculate wheel force from engine (if engine spec is available)
+            if (ctx.engineSpec != null && ctx.gearboxSpec != null && state.engineRPM > 0f)
+            {
+                // Get current gear ratio
+                float currentGearRatio = 0f;
+                if (state.currentGear == -1)
+                {
+                    currentGearRatio = ctx.gearboxSpec.reverseGearRatio * ctx.gearboxSpec.finalDriveRatio;
+                }
+                else if (state.currentGear > 0 && state.currentGear <= ctx.gearboxSpec.gearRatios.Length)
+                {
+                    int arrayIndex = state.currentGear - 1;
+                    currentGearRatio = ctx.gearboxSpec.gearRatios[arrayIndex] * ctx.gearboxSpec.finalDriveRatio;
+                }
+
+                float wheelRadius = state.wheelRadius > 0.01f 
+                    ? state.wheelRadius 
+                    : (ctx.wheelSpec != null ? ctx.wheelSpec.wheelRadius : 0.3f);
+
+                // Calculate wheel force using EngineModel
+                var engineModel = new Vehicle.Modules.DriveModels.EngineModel();
+                wheelForce = engineModel.CalculateWheelForce(
+                    forwardSpeed,
+                    input.throttle,
+                    ctx.engineSpec,
+                    state.engineRPM,
+                    currentGearRatio,
+                    ctx.gearboxSpec.finalDriveRatio,
+                    wheelRadius
+                );
+            }
+
+            // Net Force (wheel - drag - damping)
+            netForce = wheelForce - dragForce - dampingForce;
 
             // Get side speed (lateral velocity - left/right movement)
             float sideSpeed = state.localVelocity.x;
 
-            // Output all parameters in a table format, grouped by category
-            Debug.Log(
-                $"<color=black>=== VEHICLE TELEMETRY ===\n" +
-                $"[INPUT]\n" +
-                $"  Throttle: {input.throttle:F2}\n" +
-                $"  Brake: {input.brake:F2}\n" +
-                $"  Steer: {input.steer:F2}\n" +
-                $"[MOTION]\n" +
-                $"  Speed: {speed:F2} m/s\n" +
-                $"  Side Speed: {sideSpeed:F2} m/s\n" +
-                $"  Yaw Rate: {state.yawRate:F2} rad/s\n" +
-                $"  Acceleration: {acceleration:F2} m/s²\n" +
-                $"[FORCES]\n" +
-                $"  Motor Force: {motorForce:F0} N\n" +
-                $"  Drag Force: {dragForce:F0} N\n" +
-                $"  Damping Force: {dampingForce:F0} N\n" +
-                $"  Net Force: {netForce:F0} N</color>"
-            );
+            // Build telemetry string with all sections
+            string telemetry = "<color=black>=== VEHICLE TELEMETRY ===\n";
+
+            // INPUT section
+            telemetry += "[INPUT]\n";
+            telemetry += $"  Throttle: {input.throttle:F2}\n";
+            telemetry += $"  Brake: {input.brake:F2}\n";
+            telemetry += $"  Steer: {input.steer:F2}\n";
+
+            // MOTION section
+            telemetry += "[MOTION]\n";
+            telemetry += $"  Speed: {speed:F2} m/s ({speed * 3.6f:F1} km/h)\n";
+            telemetry += $"  Side Speed: {sideSpeed:F2} m/s\n";
+            telemetry += $"  Yaw Rate: {state.yawRate:F2} rad/s\n";
+            telemetry += $"  Acceleration: {acceleration:F2} m/s²\n";
+
+            // ENGINE section (if engine spec is available)
+            if (ctx.engineSpec != null)
+            {
+                float rpm = state.engineRPM;
+                float powerHP = 0f;
+                float torqueNm = 0f;
+
+                // Calculate power and torque if we have RPM
+                if (rpm > 0f && input.throttle > 0f)
+                {
+                    // Normalize RPM
+                    float normalizedRPM = Mathf.Clamp01((rpm - ctx.engineSpec.idleRPM) / 
+                        (ctx.engineSpec.maxRPM - ctx.engineSpec.idleRPM));
+                    
+                    // Get from curves
+                    float powerMultiplier = ctx.engineSpec.powerCurve.Evaluate(normalizedRPM);
+                    float torqueMultiplier = ctx.engineSpec.torqueCurve.Evaluate(normalizedRPM);
+                    
+                    powerHP = ctx.engineSpec.maxPower * powerMultiplier * input.throttle;
+                    torqueNm = ctx.engineSpec.maxTorque * torqueMultiplier * input.throttle;
+                }
+
+                telemetry += "[ENGINE]\n";
+                telemetry += $"  RPM: {rpm:F0} / {ctx.engineSpec.maxRPM:F0}\n";
+                telemetry += $"  Power: {powerHP:F1} HP ({powerHP * 0.7457f:F1} kW)\n";
+                telemetry += $"  Torque: {torqueNm:F1} Nm\n";
+                telemetry += $"  Max Power: {ctx.engineSpec.maxPower:F1} HP\n";
+                telemetry += $"  Max Torque: {ctx.engineSpec.maxTorque:F1} Nm\n";
+            }
+
+            // GEARBOX section (if gearbox spec is available)
+            if (ctx.gearboxSpec != null)
+            {
+                string gearName = GetGearName(state.currentGear);
+                float currentGearRatio = 0f;
+
+                // Calculate current gear ratio
+                if (state.currentGear == -1)
+                {
+                    currentGearRatio = ctx.gearboxSpec.reverseGearRatio * ctx.gearboxSpec.finalDriveRatio;
+                }
+                else if (state.currentGear > 0 && state.currentGear <= ctx.gearboxSpec.gearRatios.Length)
+                {
+                    int arrayIndex = state.currentGear - 1;
+                    currentGearRatio = ctx.gearboxSpec.gearRatios[arrayIndex] * ctx.gearboxSpec.finalDriveRatio;
+                }
+
+                string transmissionType = ctx.gearboxSpec.transmissionType.ToString();
+
+                telemetry += "[GEARBOX]\n";
+                telemetry += $"  Gear: {gearName}\n";
+                telemetry += $"  Gear Ratio: {currentGearRatio:F2}\n";
+                telemetry += $"  Transmission: {transmissionType}\n";
+                telemetry += $"  Final Drive: {ctx.gearboxSpec.finalDriveRatio:F2}\n";
+            }
+
+            // WHEELS section
+            if (state.wheelRadius > 0.01f)
+            {
+                telemetry += "[WHEELS]\n";
+                telemetry += $"  Wheel Radius: {state.wheelRadius:F3} m\n";
+            }
+
+            // FORCES section (engine-based)
+            telemetry += "[FORCES]\n";
+            if (ctx.engineSpec != null)
+            {
+                telemetry += $"  Wheel Force: {wheelForce:F0} N\n";
+            }
+            telemetry += $"  Drag Force: {dragForce:F0} N\n";
+            telemetry += $"  Damping Force: {dampingForce:F0} N\n";
+            telemetry += $"  Net Force: {netForce:F0} N\n";
+
+            telemetry += "</color>";
+
+            Debug.Log(telemetry);
         }
 
         public void OnCollisionEnter(Collision collision, in VehicleContext ctx, ref VehicleState state)
@@ -103,6 +204,21 @@ namespace Vehicle.Modules
 
             float rel = collision.relativeVelocity.magnitude;
             Debug.Log($"[Vehicle] Collision with '{collision.gameObject.name}', relativeSpeed={rel:0.00}");
+        }
+
+        /// <summary>
+        /// Gets a human-readable name for the current gear.
+        /// </summary>
+        /// <param name="gear">Gear index (-1 = reverse, 0 = neutral, 1+ = forward gears).</param>
+        /// <returns>Gear name as string (e.g., "R", "N", "1", "2", etc.).</returns>
+        private string GetGearName(int gear)
+        {
+            return gear switch
+            {
+                -1 => "R",
+                0 => "N",
+                _ => gear.ToString()
+            };
         }
     }
 }

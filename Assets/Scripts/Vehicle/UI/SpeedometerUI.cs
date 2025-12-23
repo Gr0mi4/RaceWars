@@ -29,9 +29,25 @@ namespace Vehicle.UI
         [SerializeField] private Text dampingForceText;
         [SerializeField] private Text netForceText;
         
+        [Header("UI Elements - Engine")]
+        [SerializeField] private Text rpmText;
+        [SerializeField] private Text powerText;
+        [SerializeField] private Text torqueText;
+        
+        [Header("UI Elements - Gearbox")]
+        [SerializeField] private Text gearText;
+        [SerializeField] private Text gearRatioText;
+        [SerializeField] private Text transmissionTypeText;
+        
+        [Header("UI Elements - Wheels")]
+        [SerializeField] private Text wheelRadiusText;
+        
         [Header("UI Elements - Categories")]
         [SerializeField] private Text inputCategoryText;
         [SerializeField] private Text motionCategoryText;
+        [SerializeField] private Text engineCategoryText;
+        [SerializeField] private Text gearboxCategoryText;
+        [SerializeField] private Text wheelsCategoryText;
         [SerializeField] private Text forcesCategoryText;
         
         [Header("Settings")]
@@ -43,16 +59,19 @@ namespace Vehicle.UI
         private float _prevSpeed;
         private float _prevTime;
         private CarSpec _cachedCarSpec;
+        private EngineSpec _cachedEngineSpec;
+        private GearboxSpec _cachedGearboxSpec;
 
         private void Start()
         {
             if (vehicleController == null)
             {
-                vehicleController = FindObjectOfType<VehicleController>();
+                vehicleController = FindFirstObjectByType<VehicleController>();
             }
             
-            // Cache CarSpec using reflection
+            // Cache specs using reflection
             CacheCarSpec();
+            CacheEngineAndGearboxSpecs();
             
             CreateUIElements();
         }
@@ -68,6 +87,30 @@ namespace Vehicle.UI
             {
                 _cachedCarSpec = field.GetValue(vehicleController) as CarSpec;
             }
+        }
+
+        private void CacheEngineAndGearboxSpecs()
+        {
+            if (_cachedCarSpec == null) return;
+            
+            // Get engineSpec and gearboxSpec from CarSpec
+            _cachedEngineSpec = _cachedCarSpec.engineSpec;
+            _cachedGearboxSpec = _cachedCarSpec.gearboxSpec;
+        }
+        
+        /// <summary>
+        /// Gets a human-readable name for the current gear.
+        /// </summary>
+        /// <param name="gear">Gear index (-1 = reverse, 0 = neutral, 1+ = forward gears).</param>
+        /// <returns>Gear name as string (e.g., "R", "N", "1", "2", etc.).</returns>
+        private string GetGearName(int gear)
+        {
+            return gear switch
+            {
+                -1 => "R",
+                0 => "N",
+                _ => gear.ToString()
+            };
         }
 
         private void Update()
@@ -109,25 +152,79 @@ namespace Vehicle.UI
             var inputProvider = vehicleController.GetComponent<Vehicle.Input.VehicleInputProvider>();
             VehicleInput input = inputProvider != null ? inputProvider.CurrentInput : VehicleInput.Zero;
             
-            // Calculate expected acceleration from Net Force (for debugging)
+            // Calculate expected acceleration from engine forces (for debugging)
             float expectedAcceleration = 0f;
             if (showForces && _cachedCarSpec != null && rb.mass > 0.001f)
             {
-                float motorForce = input.throttle * _cachedCarSpec.motorForce;
+                float wheelForce = 0f;
                 float dragForce = 0f;
+                float dampingForce = 0f;
+
+                // Get state via reflection to calculate engine forces
+                var stateField = typeof(VehicleController).GetField("_state", 
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+                if (stateField != null && _cachedEngineSpec != null && _cachedGearboxSpec != null)
+                {
+                    var state = stateField.GetValue(vehicleController);
+                    var rpmField = typeof(VehicleState).GetField("engineRPM");
+                    var gearField = typeof(VehicleState).GetField("currentGear");
+                    var wheelRadiusField = typeof(VehicleState).GetField("wheelRadius");
+                    
+                    if (rpmField != null && gearField != null)
+                    {
+                        float rpm = (float)rpmField.GetValue(state);
+                        int gear = (int)gearField.GetValue(state);
+                        float wheelRadiusAccel = 0.3f;
+                        if (wheelRadiusField != null)
+                        {
+                            wheelRadiusAccel = (float)wheelRadiusField.GetValue(state);
+                            if (wheelRadiusAccel < 0.01f) wheelRadiusAccel = 0.3f;
+                        }
+
+                        if (rpm > 0f)
+                        {
+                            // Calculate gear ratio
+                            float gearRatio = 0f;
+                            if (gear == -1)
+                            {
+                                gearRatio = _cachedGearboxSpec.reverseGearRatio * _cachedGearboxSpec.finalDriveRatio;
+                            }
+                            else if (gear > 0 && gear <= _cachedGearboxSpec.gearRatios.Length)
+                            {
+                                int arrayIndex = gear - 1;
+                                gearRatio = _cachedGearboxSpec.gearRatios[arrayIndex] * _cachedGearboxSpec.finalDriveRatio;
+                            }
+
+                            // Calculate wheel force using EngineModel
+                            var engineModel = new Vehicle.Modules.DriveModels.EngineModel();
+                            float forwardSpeedLocal = Vector3.Dot(rb.linearVelocity, vehicleController.transform.forward);
+                            wheelForce = engineModel.CalculateWheelForce(
+                                forwardSpeedLocal,
+                                input.throttle,
+                                _cachedEngineSpec,
+                                rpm,
+                                gearRatio,
+                                _cachedGearboxSpec.finalDriveRatio,
+                                wheelRadiusAccel
+                            );
+                        }
+                    }
+                }
+
+                // Calculate drag and damping
                 const float airDensity = 1.225f;
                 if (speed > 0.1f && _cachedCarSpec.frontArea > 0f && _cachedCarSpec.dragCoefficient > 0f)
                 {
                     dragForce = 0.5f * airDensity * _cachedCarSpec.dragCoefficient * 
                                 _cachedCarSpec.frontArea * speed * speed;
                 }
-                float dampingForce = 0f;
                 float linearDamping = RigidbodyCompat.GetLinearDamping(rb);
                 if (speed > 0.001f)
                 {
                     dampingForce = linearDamping * speed * rb.mass;
                 }
-                float netForce = motorForce - dragForce - dampingForce;
+
+                float netForce = wheelForce - dragForce - dampingForce;
                 expectedAcceleration = netForce / rb.mass;
             }
             
@@ -155,12 +252,170 @@ namespace Vehicle.UI
             if (accelerationText != null)
                 accelerationText.text = $"  Acceleration: {acceleration:F2} m/s² (Expected: {expectedAcceleration:F2})";
             
-            // Calculate and update Forces
+            // Get VehicleState (we'll need to access it through reflection or make it public)
+            // For now, we'll calculate RPM and gear from available data if possible
+            // In a real implementation, VehicleController should expose state or we use reflection
+            
+            // Update Engine section
+            if (_cachedEngineSpec != null)
+            {
+                float rpm = 0f; // Will be set from state if available
+                float powerHP = 0f;
+                float torqueNm = 0f;
+                
+                // Try to get RPM from state via reflection
+                var stateField = typeof(VehicleController).GetField("_state", 
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+                if (stateField != null)
+                {
+                    var state = stateField.GetValue(vehicleController);
+                    var rpmField = typeof(VehicleState).GetField("engineRPM");
+                    if (rpmField != null)
+                    {
+                        rpm = (float)rpmField.GetValue(state);
+                    }
+                }
+                
+                // Calculate power and torque if we have RPM and throttle
+                if (rpm > 0f && input.throttle > 0f)
+                {
+                    float normalizedRPM = Mathf.Clamp01((rpm - _cachedEngineSpec.idleRPM) / 
+                        (_cachedEngineSpec.maxRPM - _cachedEngineSpec.idleRPM));
+                    
+                    float powerMultiplier = _cachedEngineSpec.powerCurve.Evaluate(normalizedRPM);
+                    float torqueMultiplier = _cachedEngineSpec.torqueCurve.Evaluate(normalizedRPM);
+                    
+                    powerHP = _cachedEngineSpec.maxPower * powerMultiplier * input.throttle;
+                    torqueNm = _cachedEngineSpec.maxTorque * torqueMultiplier * input.throttle;
+                }
+                
+                if (rpmText != null)
+                    rpmText.text = $"  RPM: {rpm:F0} / {_cachedEngineSpec.maxRPM:F0}";
+                if (powerText != null)
+                    powerText.text = $"  Power: {powerHP:F1} HP ({powerHP * 0.7457f:F1} kW)";
+                if (torqueText != null)
+                    torqueText.text = $"  Torque: {torqueNm:F1} Nm";
+            }
+            
+            // Update Gearbox section
+            if (_cachedGearboxSpec != null)
+            {
+                int currentGear = 0;
+                float currentGearRatio = 0f;
+                
+                // Try to get gear from state via reflection
+                var stateField = typeof(VehicleController).GetField("_state", 
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+                if (stateField != null)
+                {
+                    var state = stateField.GetValue(vehicleController);
+                    var gearField = typeof(VehicleState).GetField("currentGear");
+                    if (gearField != null)
+                    {
+                        currentGear = (int)gearField.GetValue(state);
+                    }
+                }
+                
+                // Calculate gear ratio
+                if (currentGear == -1)
+                {
+                    currentGearRatio = _cachedGearboxSpec.reverseGearRatio * _cachedGearboxSpec.finalDriveRatio;
+                }
+                else if (currentGear > 0 && currentGear <= _cachedGearboxSpec.gearRatios.Length)
+                {
+                    int arrayIndex = currentGear - 1;
+                    currentGearRatio = _cachedGearboxSpec.gearRatios[arrayIndex] * _cachedGearboxSpec.finalDriveRatio;
+                }
+                
+                string gearName = GetGearName(currentGear);
+                string transmissionType = _cachedGearboxSpec.transmissionType.ToString();
+                
+                if (gearText != null)
+                    gearText.text = $"  Gear: {gearName}";
+                if (gearRatioText != null)
+                    gearRatioText.text = $"  Gear Ratio: {currentGearRatio:F2}";
+                if (transmissionTypeText != null)
+                    transmissionTypeText.text = $"  Transmission: {transmissionType}";
+            }
+            
+            // Update Wheels section
+            float wheelRadius = 0f;
+            var stateFieldWheel = typeof(VehicleController).GetField("_state", 
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            if (stateFieldWheel != null)
+            {
+                var state = stateFieldWheel.GetValue(vehicleController);
+                var wheelRadiusField = typeof(VehicleState).GetField("wheelRadius");
+                if (wheelRadiusField != null)
+                {
+                    wheelRadius = (float)wheelRadiusField.GetValue(state);
+                }
+            }
+            
+            if (wheelRadius > 0.01f && wheelRadiusText != null)
+            {
+                wheelRadiusText.text = $"  Wheel Radius: {wheelRadius:F3} m";
+            }
+            
+            // Calculate and update Forces (engine-based)
             if (showForces && _cachedCarSpec != null)
             {
-                float motorForce = input.throttle * _cachedCarSpec.motorForce;
-                
+                float wheelForce = 0f;
                 float dragForce = 0f;
+                float dampingForce = 0f;
+                
+                // Get state via reflection to calculate engine forces
+                var stateField = typeof(VehicleController).GetField("_state", 
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+                if (stateField != null && _cachedEngineSpec != null && _cachedGearboxSpec != null)
+                {
+                    var state = stateField.GetValue(vehicleController);
+                    var rpmField = typeof(VehicleState).GetField("engineRPM");
+                    var gearField = typeof(VehicleState).GetField("currentGear");
+                    var wheelRadiusField = typeof(VehicleState).GetField("wheelRadius");
+                    
+                    if (rpmField != null && gearField != null)
+                    {
+                        float rpm = (float)rpmField.GetValue(state);
+                        int gear = (int)gearField.GetValue(state);
+                        float wheelRadiusForcesCalc = 0.3f;
+                        if (wheelRadiusField != null)
+                        {
+                            wheelRadiusForcesCalc = (float)wheelRadiusField.GetValue(state);
+                            if (wheelRadiusForcesCalc < 0.01f) wheelRadiusForcesCalc = 0.3f;
+                        }
+
+                        if (rpm > 0f)
+                        {
+                            // Calculate gear ratio
+                            float gearRatio = 0f;
+                            if (gear == -1)
+                            {
+                                gearRatio = _cachedGearboxSpec.reverseGearRatio * _cachedGearboxSpec.finalDriveRatio;
+                            }
+                            else if (gear > 0 && gear <= _cachedGearboxSpec.gearRatios.Length)
+                            {
+                                int arrayIndex = gear - 1;
+                                gearRatio = _cachedGearboxSpec.gearRatios[arrayIndex] * _cachedGearboxSpec.finalDriveRatio;
+                            }
+
+                            // Calculate wheel force using EngineModel
+                            var engineModel = new Vehicle.Modules.DriveModels.EngineModel();
+                            float forwardSpeedForcesCalc = Vector3.Dot(rb.linearVelocity, vehicleController.transform.forward);
+                            wheelForce = engineModel.CalculateWheelForce(
+                                forwardSpeedForcesCalc,
+                                input.throttle,
+                                _cachedEngineSpec,
+                                rpm,
+                                gearRatio,
+                                _cachedGearboxSpec.finalDriveRatio,
+                                wheelRadiusForcesCalc
+                            );
+                        }
+                    }
+                }
+                
+                // Calculate drag and damping
                 const float airDensity = 1.225f;
                 if (speed > 0.1f && _cachedCarSpec.frontArea > 0f && _cachedCarSpec.dragCoefficient > 0f)
                 {
@@ -168,22 +423,21 @@ namespace Vehicle.UI
                                 _cachedCarSpec.frontArea * speed * speed;
                 }
                 
-                float dampingForce = 0f;
                 float linearDamping = RigidbodyCompat.GetLinearDamping(rb);
                 if (speed > 0.001f)
                 {
                     dampingForce = linearDamping * speed * rb.mass;
                 }
                 
-                float netForce = motorForce - dragForce - dampingForce;
+                float netForce = wheelForce - dragForce - dampingForce;
                 
                 // Calculate power in horsepower (1 HP = 745.7 W = 745.7 N·m/s)
                 // Power = Force × Speed
-                float motorPowerHP = 0f;
-                if (speed > 0.001f && motorForce > 0f)
+                float wheelPowerHP = 0f;
+                if (speed > 0.001f && wheelForce > 0f)
                 {
-                    float motorPowerW = motorForce * speed; // Watts
-                    motorPowerHP = motorPowerW / 745.7f; // Horsepower
+                    float wheelPowerW = wheelForce * speed; // Watts
+                    wheelPowerHP = wheelPowerW / 745.7f; // Horsepower
                 }
                 
                 float dragPowerHP = 0f;
@@ -208,7 +462,7 @@ namespace Vehicle.UI
                 }
                 
                 if (motorForceText != null)
-                    motorForceText.text = $"  Motor Force: {motorForce:F0} N ({motorPowerHP:F1} HP)";
+                    motorForceText.text = $"  Wheel Force: {wheelForce:F0} N ({wheelPowerHP:F1} HP)";
                 if (dragForceText != null)
                     dragForceText.text = $"  Drag Force: {dragForce:F0} N ({dragPowerHP:F1} HP)";
                 if (dampingForceText != null)
@@ -279,7 +533,7 @@ namespace Vehicle.UI
             containerRect.anchorMax = new Vector2(0, 0);
             containerRect.pivot = new Vector2(0, 0);
             containerRect.anchoredPosition = new Vector2(20, 20);
-            containerRect.sizeDelta = new Vector2(350, 600);
+            containerRect.sizeDelta = new Vector2(400, 900);
             
             float yOffset = 0;
             float lineHeight = 30;
@@ -320,6 +574,49 @@ namespace Vehicle.UI
             yOffset -= lineHeight;
             
             accelerationText = CreateTextElement(container.transform, "AccelerationText", "  Acceleration: 0.00 m/s²", 
+                new Vector2(0, yOffset), 16, Color.black, FontStyle.Bold);
+            yOffset -= categorySpacing;
+            
+            // [ENGINE] category
+            engineCategoryText = CreateTextElement(container.transform, "EngineCategory", "[ENGINE]", 
+                new Vector2(0, yOffset), 20, Color.white, FontStyle.Bold);
+            yOffset -= lineHeight;
+            
+            rpmText = CreateTextElement(container.transform, "RpmText", "  RPM: 0 / 0", 
+                new Vector2(0, yOffset), 16, Color.black, FontStyle.Bold);
+            yOffset -= lineHeight;
+            
+            powerText = CreateTextElement(container.transform, "PowerText", "  Power: 0.0 HP", 
+                new Vector2(0, yOffset), 16, Color.black, FontStyle.Bold);
+            yOffset -= lineHeight;
+            
+            torqueText = CreateTextElement(container.transform, "TorqueText", "  Torque: 0.0 Nm", 
+                new Vector2(0, yOffset), 16, Color.black, FontStyle.Bold);
+            yOffset -= categorySpacing;
+            
+            // [GEARBOX] category
+            gearboxCategoryText = CreateTextElement(container.transform, "GearboxCategory", "[GEARBOX]", 
+                new Vector2(0, yOffset), 20, Color.white, FontStyle.Bold);
+            yOffset -= lineHeight;
+            
+            gearText = CreateTextElement(container.transform, "GearText", "  Gear: N", 
+                new Vector2(0, yOffset), 16, Color.black, FontStyle.Bold);
+            yOffset -= lineHeight;
+            
+            gearRatioText = CreateTextElement(container.transform, "GearRatioText", "  Gear Ratio: 0.00", 
+                new Vector2(0, yOffset), 16, Color.black, FontStyle.Bold);
+            yOffset -= lineHeight;
+            
+            transmissionTypeText = CreateTextElement(container.transform, "TransmissionTypeText", "  Transmission: Automatic", 
+                new Vector2(0, yOffset), 16, Color.black, FontStyle.Bold);
+            yOffset -= categorySpacing;
+            
+            // [WHEELS] category
+            wheelsCategoryText = CreateTextElement(container.transform, "WheelsCategory", "[WHEELS]", 
+                new Vector2(0, yOffset), 20, Color.white, FontStyle.Bold);
+            yOffset -= lineHeight;
+            
+            wheelRadiusText = CreateTextElement(container.transform, "WheelRadiusText", "  Wheel Radius: 0.000 m", 
                 new Vector2(0, yOffset), 16, Color.black, FontStyle.Bold);
             yOffset -= categorySpacing;
             

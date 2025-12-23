@@ -35,6 +35,19 @@ namespace Vehicle.Core
         {
             _rb = GetComponent<Rigidbody>();
             
+            // Initialize vehicle state with default values
+            _state = new VehicleState
+            {
+                worldVelocity = Vector3.zero,
+                localVelocity = Vector3.zero,
+                speed = 0f,
+                yawRate = 0f,
+                engineRPM = 0f,
+                wheelAngularVelocity = 0f,
+                currentGear = 1, // Start in 1st gear (matches GearboxModel default)
+                wheelRadius = 0f // Will be set by WheelModule or use default from WheelSpec
+            };
+            
             // Use serialized field if assigned, otherwise try to get component
             if (inputProvider == null)
             {
@@ -73,10 +86,23 @@ namespace Vehicle.Core
                 return;
 
             UpdateState();
-            var ctx = new VehicleContext(_rb, transform, carSpec, Time.fixedDeltaTime);
+            // Create context with engine, gearbox, and wheel specs from CarSpec
+            var ctx = new VehicleContext(
+                _rb, 
+                transform, 
+                carSpec, 
+                Time.fixedDeltaTime,
+                carSpec?.engineSpec,
+                carSpec?.gearboxSpec,
+                carSpec?.wheelSpec
+            );
             var input = inputProvider.CurrentInput;
 
             _pipeline.Tick(input, ref _state, ctx);
+
+            // Consume shift flags after processing - this ensures one-shot behavior
+            // Each key press triggers only one shift action, even if FixedUpdate is called multiple times
+            inputProvider.ConsumeShiftFlags();
         }
 
         /// <summary>
@@ -99,7 +125,15 @@ namespace Vehicle.Core
             if (_pipeline == null || carSpec == null)
                 return;
 
-            var ctx = new VehicleContext(_rb, transform, carSpec, Time.fixedDeltaTime);
+            var ctx = new VehicleContext(
+                _rb, 
+                transform, 
+                carSpec, 
+                Time.fixedDeltaTime,
+                carSpec?.engineSpec,
+                carSpec?.gearboxSpec,
+                carSpec?.wheelSpec
+            );
             _pipeline.NotifyCollision(collision, ctx, ref _state);
         }
     }
