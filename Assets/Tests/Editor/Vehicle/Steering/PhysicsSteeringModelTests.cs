@@ -1,20 +1,20 @@
 using NUnit.Framework;
 using UnityEngine;
 using Vehicle.Core;
-using Vehicle.Modules.SteeringModels;
-using Vehicle.Specs.Modules.SteeringModels;
+using Vehicle.Systems;
+using Vehicle.Specs;
 
 namespace Vehicle.Tests.Steering
 {
     /// <summary>
-    /// Unit tests for PhysicsSteeringModel.
+    /// Unit tests for SteeringSystem.
     /// Tests bicycle model, grip limits, friction circle, and edge cases.
     /// </summary>
     [TestFixture]
     public class PhysicsSteeringModelTests
     {
-        private PhysicsSteeringModelSpec _spec;
-        private PhysicsSteeringModel _model;
+        private SteeringSpec _spec;
+        private SteeringSystem _system;
         private GameObject _gameObject;
         private Rigidbody _rigidbody;
         private Transform _transform;
@@ -23,7 +23,7 @@ namespace Vehicle.Tests.Steering
         public void SetUp()
         {
             // Create test spec with known values
-            _spec = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            _spec = ScriptableObject.CreateInstance<SteeringSpec>();
             _spec.wheelbase = 2.8f;
             _spec.maxSteerAngle = 32f;
             _spec.baseMu = 0.75f;
@@ -32,9 +32,8 @@ namespace Vehicle.Tests.Steering
             _spec.yawResponseTime = 0.11f;
             _spec.maxYawAccel = 11f;
             _spec.minForwardSpeed = 0.2f;
-            _spec.enableDebugLogs = false;
 
-            _model = new PhysicsSteeringModel(_spec);
+            _system = new SteeringSystem(_spec);
 
             // Create test GameObject with Rigidbody
             _gameObject = new GameObject("TestVehicle");
@@ -69,7 +68,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = _model.ApplySteering(input, state, ctx, out float torque);
+            bool result = _system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             Assert.IsFalse(result);
@@ -89,7 +88,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = _model.ApplySteering(input, state, ctx, out float torque);
+            bool result = _system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             Assert.IsFalse(result);
@@ -109,7 +108,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = _model.ApplySteering(input, state, ctx, out float torque);
+            bool result = _system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             Assert.IsFalse(result);
@@ -129,7 +128,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = _model.ApplySteering(input, state, ctx, out float torque);
+            bool result = _system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             Assert.IsTrue(result);
@@ -150,7 +149,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = _model.ApplySteering(input, state, ctx, out float torque);
+            bool result = _system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             Assert.IsTrue(result);
@@ -171,8 +170,8 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            _model.ApplySteering(inputNoBrake, state, ctx, out float torqueNoBrake);
-            _model.ApplySteering(inputWithBrake, state, ctx, out float torqueWithBrake);
+            _system.ApplySteering(inputNoBrake, state, ctx, out float torqueNoBrake);
+            _system.ApplySteering(inputWithBrake, state, ctx, out float torqueWithBrake);
 
             // Assert
             // With braking, lateral grip is reduced, so torque should be lower (or equal if already at limit)
@@ -193,8 +192,8 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            _model.ApplySteering(inputNoThrottle, state, ctx, out float torqueNoThrottle);
-            _model.ApplySteering(inputWithThrottle, state, ctx, out float torqueWithThrottle);
+            _system.ApplySteering(inputNoThrottle, state, ctx, out float torqueNoThrottle);
+            _system.ApplySteering(inputWithThrottle, state, ctx, out float torqueWithThrottle);
 
             // Assert
             // With throttle, lateral grip is reduced
@@ -215,8 +214,8 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            _model.ApplySteering(inputNoHandbrake, state, ctx, out float torqueNoHandbrake);
-            _model.ApplySteering(inputWithHandbrake, state, ctx, out float torqueWithHandbrake);
+            _system.ApplySteering(inputNoHandbrake, state, ctx, out float torqueNoHandbrake);
+            _system.ApplySteering(inputWithHandbrake, state, ctx, out float torqueWithHandbrake);
 
             // Assert
             // Handbrake should significantly reduce grip (multiplier = 0.2)
@@ -236,7 +235,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = _model.ApplySteering(input, state, ctx, out float torque);
+            bool result = _system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             Assert.IsTrue(result);
@@ -263,8 +262,8 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            _model.ApplySteering(input, stateNoYaw, ctx, out float torqueNoYaw);
-            _model.ApplySteering(input, stateWithYaw, ctx, out float torqueWithYaw);
+            _system.ApplySteering(input, stateNoYaw, ctx, out float torqueNoYaw);
+            _system.ApplySteering(input, stateWithYaw, ctx, out float torqueWithYaw);
 
             // Assert
             // If already rotating in desired direction, torque should be less
@@ -286,7 +285,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = _model.ApplySteering(input, state, ctx, out float torque);
+            bool result = _system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             Assert.IsTrue(result);
@@ -306,7 +305,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = _model.ApplySteering(input, state, ctx, out float torque);
+            bool result = _system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             Assert.IsTrue(result);
@@ -326,7 +325,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = _model.ApplySteering(input, state, ctx, out float torque);
+            bool result = _system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             // Should still work (input.steer is used directly, clamping happens in maxSteerAngle)
@@ -338,7 +337,7 @@ namespace Vehicle.Tests.Steering
         public void ApplySteering_NullSpec_UsesDefaults()
         {
             // Arrange
-            var modelWithNullSpec = new PhysicsSteeringModel(null);
+            var systemWithNullSpec = new SteeringSystem(null);
             var input = new VehicleInput { steer = 1f };
             var state = new VehicleState
             {
@@ -350,7 +349,7 @@ namespace Vehicle.Tests.Steering
             // Act & Assert - should not throw
             Assert.DoesNotThrow(() =>
             {
-                modelWithNullSpec.ApplySteering(input, state, ctx, out float torque);
+                systemWithNullSpec.ApplySteering(input, state, ctx, out float torque);
             });
         }
 
@@ -358,10 +357,10 @@ namespace Vehicle.Tests.Steering
         public void ApplySteering_InvalidSpecValues_HandlesGracefully()
         {
             // Arrange
-            var invalidSpec = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var invalidSpec = ScriptableObject.CreateInstance<SteeringSpec>();
             invalidSpec.wheelbase = 0f; // Invalid
             invalidSpec.baseMu = -1f; // Invalid
-            var model = new PhysicsSteeringModel(invalidSpec);
+            var system = new SteeringSystem(invalidSpec);
             var input = new VehicleInput { steer = 1f };
             var state = new VehicleState
             {
@@ -371,7 +370,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act & Assert - should not throw or produce NaN
-            bool result = model.ApplySteering(input, state, ctx, out float torque);
+            bool result = system.ApplySteering(input, state, ctx, out float torque);
             Assert.IsTrue(float.IsFinite(torque) || !result);
             
             Object.DestroyImmediate(invalidSpec);
@@ -382,11 +381,17 @@ namespace Vehicle.Tests.Steering
         {
             // Arrange
             // Test that friction circle strength affects grip reduction
-            var specStrong = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var specStrong = ScriptableObject.CreateInstance<SteeringSpec>();
             specStrong.frictionCircleStrength = 1.0f; // Maximum coupling
-            var modelStrong = new PhysicsSteeringModel(specStrong);
+            specStrong.wheelbase = 2.8f;
+            specStrong.maxSteerAngle = 32f;
+            specStrong.baseMu = 0.75f;
+            specStrong.yawResponseTime = 0.11f;
+            specStrong.maxYawAccel = 11f;
+            specStrong.minForwardSpeed = 0.2f;
+            var systemStrong = new SteeringSystem(specStrong);
 
-            var specWeak = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var specWeak = ScriptableObject.CreateInstance<SteeringSpec>();
             specWeak.frictionCircleStrength = 0.5f; // Weak coupling
             specWeak.wheelbase = 2.8f;
             specWeak.maxSteerAngle = 32f;
@@ -394,7 +399,7 @@ namespace Vehicle.Tests.Steering
             specWeak.yawResponseTime = 0.11f;
             specWeak.maxYawAccel = 11f;
             specWeak.minForwardSpeed = 0.2f;
-            var modelWeak = new PhysicsSteeringModel(specWeak);
+            var systemWeak = new SteeringSystem(specWeak);
 
             var input = new VehicleInput { steer = 1f, brake = 1f }; // Full brake + steer
             var state = new VehicleState
@@ -405,8 +410,8 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            modelStrong.ApplySteering(input, state, ctx, out float torqueStrong);
-            modelWeak.ApplySteering(input, state, ctx, out float torqueWeak);
+            systemStrong.ApplySteering(input, state, ctx, out float torqueStrong);
+            systemWeak.ApplySteering(input, state, ctx, out float torqueWeak);
 
             // Assert
             // Strong coupling should reduce grip more than weak coupling

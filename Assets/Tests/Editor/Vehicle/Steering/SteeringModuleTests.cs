@@ -1,15 +1,13 @@
 using NUnit.Framework;
 using UnityEngine;
 using Vehicle.Core;
-using Vehicle.Modules;
-using Vehicle.Modules.SteeringModels;
+using Vehicle.Systems;
 using Vehicle.Specs;
-using Vehicle.Specs.Modules.SteeringModels;
 
 namespace Vehicle.Tests.Steering
 {
     /// <summary>
-    /// Unit tests for SteeringModule.
+    /// Unit tests for SteeringSystem.
     /// Tests physics-based steering mode.
     /// </summary>
     [TestFixture]
@@ -48,15 +46,14 @@ namespace Vehicle.Tests.Steering
         public void SteeringModule_PhysicsMode_AppliesTorque()
         {
             // Arrange
-            var spec = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.wheelbase = 2.8f;
             spec.maxSteerAngle = 32f;
             spec.baseMu = 0.75f;
             spec.yawResponseTime = 0.11f;
             spec.maxYawAccel = 11f;
             spec.minForwardSpeed = 0.2f;
-            var model = spec.CreateModel();
-            var module = new SteeringModule(model);
+            var system = new SteeringSystem(spec);
 
             var input = new VehicleInput { steer = 1f };
             var state = new VehicleState
@@ -70,7 +67,7 @@ namespace Vehicle.Tests.Steering
             Vector3 initialAngularVelocity = _rigidbody.angularVelocity;
 
             // Act
-            module.Tick(input, ref state, ctx);
+            system.Tick(input, ref state, ctx);
 
             // Assert
             Vector3 finalAngularVelocity = _rigidbody.angularVelocity;
@@ -84,15 +81,14 @@ namespace Vehicle.Tests.Steering
         public void SteeringModule_PhysicsMode_ZeroSteer_DoesNotApplyTorque()
         {
             // Arrange
-            var spec = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.wheelbase = 2.8f;
             spec.maxSteerAngle = 32f;
             spec.baseMu = 0.75f;
             spec.yawResponseTime = 0.11f;
             spec.maxYawAccel = 11f;
             spec.minForwardSpeed = 0.2f;
-            var model = spec.CreateModel();
-            var module = new SteeringModule(model);
+            var system = new SteeringSystem(spec);
 
             var input = VehicleInput.Zero; // No steering
             var state = new VehicleState
@@ -106,7 +102,7 @@ namespace Vehicle.Tests.Steering
             Vector3 initialAngularVelocity = _rigidbody.angularVelocity;
 
             // Act
-            module.Tick(input, ref state, ctx);
+            system.Tick(input, ref state, ctx);
 
             // Assert
             Vector3 finalAngularVelocity = _rigidbody.angularVelocity;
@@ -120,7 +116,7 @@ namespace Vehicle.Tests.Steering
         public void SteeringModule_NullModel_HandlesGracefully()
         {
             // Arrange
-            var module = new SteeringModule((ISteeringModel)null);
+            var system = new SteeringSystem(null);
             var input = new VehicleInput { steer = 1f };
             var state = new VehicleState
             {
@@ -133,7 +129,7 @@ namespace Vehicle.Tests.Steering
             // Act & Assert - should not throw
             Assert.DoesNotThrow(() =>
             {
-                module.Tick(input, ref state, ctx);
+                system.Tick(input, ref state, ctx);
             });
         }
 
@@ -141,15 +137,14 @@ namespace Vehicle.Tests.Steering
         public void SteeringModule_NullRigidbody_HandlesGracefully()
         {
             // Arrange
-            var spec = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.wheelbase = 2.8f;
             spec.maxSteerAngle = 32f;
             spec.baseMu = 0.75f;
             spec.yawResponseTime = 0.11f;
             spec.maxYawAccel = 11f;
             spec.minForwardSpeed = 0.2f;
-            var model = spec.CreateModel();
-            var module = new SteeringModule(model);
+            var system = new SteeringSystem(spec);
 
             var input = new VehicleInput { steer = 1f };
             var state = new VehicleState
@@ -162,10 +157,10 @@ namespace Vehicle.Tests.Steering
             // Create context with null rigidbody
             var ctx = new VehicleContext(null, _transform, _carSpec, 0.02f);
 
-            // Act & Assert - should not throw (module should check for null)
+            // Act & Assert - should not throw (system should check for null)
             Assert.DoesNotThrow(() =>
             {
-                module.Tick(input, ref state, ctx);
+                system.Tick(input, ref state, ctx);
             });
 
             Object.DestroyImmediate(spec);

@@ -1,14 +1,14 @@
 using NUnit.Framework;
 using UnityEngine;
 using Vehicle.Core;
-using Vehicle.Modules.DriveModels;
+using Vehicle.Systems;
 using Vehicle.Specs;
 
 namespace Vehicle.Tests.Engine
 {
     /// <summary>
-    /// Integration tests for EngineDriveModel.
-    /// Tests integration with EngineModel and GearboxModel, force application, and reverse gear handling.
+    /// Integration tests for DriveSystem.
+    /// Tests integration with EngineSystem and GearboxSystem, force application, and reverse gear handling.
     /// </summary>
     [TestFixture]
     public class EngineDriveModelTests
@@ -20,7 +20,7 @@ namespace Vehicle.Tests.Engine
         private EngineSpec _engineSpec;
         private GearboxSpec _gearboxSpec;
         private WheelSpec _wheelSpec;
-        private EngineDriveModel _driveModel;
+        private DriveSystem _driveSystem;
 
         [SetUp]
         public void SetUp()
@@ -58,7 +58,7 @@ namespace Vehicle.Tests.Engine
             _carSpec.gearboxSpec = _gearboxSpec;
             _carSpec.wheelSpec = _wheelSpec;
 
-            _driveModel = new EngineDriveModel(1.0f);
+            _driveSystem = new DriveSystem(1.0f);
         }
 
         [TearDown]
@@ -105,7 +105,7 @@ namespace Vehicle.Tests.Engine
             Vector3 initialVelocity = _rigidbody.linearVelocity;
 
             // Act
-            _driveModel.ApplyDrive(input, ref state, ctx);
+            _driveSystem.Tick(input, ref state, ctx);
 
             // Assert
             Vector3 finalVelocity = _rigidbody.linearVelocity;
@@ -130,7 +130,7 @@ namespace Vehicle.Tests.Engine
             var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f);
 
             // Act
-            _driveModel.ApplyDrive(input, ref state, ctx);
+            _driveSystem.Tick(input, ref state, ctx);
 
             // Assert
             // Should shift to reverse and apply backward force
@@ -157,7 +157,7 @@ namespace Vehicle.Tests.Engine
             Vector3 initialVelocity = _rigidbody.linearVelocity;
 
             // Act
-            _driveModel.ApplyDrive(input, ref state, ctx);
+            _driveSystem.Tick(input, ref state, ctx);
 
             // Assert
             // Force should be minimal (only drag/damping, no engine force)
@@ -182,7 +182,7 @@ namespace Vehicle.Tests.Engine
             var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f);
 
             // Act
-            _driveModel.ApplyDrive(input, ref state, ctx);
+            _driveSystem.Tick(input, ref state, ctx);
 
             // Assert
             // RPM should be calculated and stored in state
@@ -207,7 +207,7 @@ namespace Vehicle.Tests.Engine
             var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f);
 
             // Act
-            _driveModel.ApplyDrive(input, ref state, ctx);
+            _driveSystem.Tick(input, ref state, ctx);
 
             // Assert
             // Gear should be updated (should be 1st gear or higher)
@@ -224,12 +224,12 @@ namespace Vehicle.Tests.Engine
                 speed = 0f,
                 wheelRadius = 0.3f
             };
-            var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f, null, _gearboxSpec, _wheelSpec);
+            var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f, null, _gearboxSpec, _wheelSpec, null, null);
 
             Vector3 initialVelocity = _rigidbody.linearVelocity;
 
             // Act
-            _driveModel.ApplyDrive(input, ref state, ctx);
+            _driveSystem.Tick(input, ref state, ctx);
 
             // Assert
             // Should not apply force without engine spec
@@ -247,12 +247,12 @@ namespace Vehicle.Tests.Engine
                 speed = 0f,
                 wheelRadius = 0.3f
             };
-            var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f, _engineSpec, null, _wheelSpec);
+            var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f, _engineSpec, null, _wheelSpec, null, null);
 
             Vector3 initialVelocity = _rigidbody.linearVelocity;
 
             // Act
-            _driveModel.ApplyDrive(input, ref state, ctx);
+            _driveSystem.Tick(input, ref state, ctx);
 
             // Assert
             // Should not apply force without gearbox spec
@@ -277,7 +277,7 @@ namespace Vehicle.Tests.Engine
             var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f);
 
             // Trigger a shift
-            _driveModel.ApplyDrive(input, ref state, ctx);
+            _driveSystem.Tick(input, ref state, ctx);
             
             // Get the gearbox model and check if it's shifting
             // This is a simplified test - in reality, we'd need to access the internal gearbox model
@@ -298,12 +298,12 @@ namespace Vehicle.Tests.Engine
             var carSpecNoEngine = ScriptableObject.CreateInstance<CarSpec>();
             carSpecNoEngine.engineSpec = null;
             carSpecNoEngine.gearboxSpec = null;
-            var ctx = new VehicleContext(_rigidbody, _transform, carSpecNoEngine, 0.02f, null, null, _wheelSpec);
+            var ctx = new VehicleContext(_rigidbody, _transform, carSpecNoEngine, 0.02f, null, null, _wheelSpec, null, null);
 
             Vector3 initialVelocity = _rigidbody.linearVelocity;
 
             // Act
-            _driveModel.ApplyDrive(input, ref state, ctx);
+            _driveSystem.Tick(input, ref state, ctx);
 
             // Assert
             // Should not apply force without engine spec
@@ -327,12 +327,12 @@ namespace Vehicle.Tests.Engine
             var carSpecNoGearbox = ScriptableObject.CreateInstance<CarSpec>();
             carSpecNoGearbox.engineSpec = null;
             carSpecNoGearbox.gearboxSpec = null;
-            var ctx = new VehicleContext(_rigidbody, _transform, carSpecNoGearbox, 0.02f, null, null, _wheelSpec);
+            var ctx = new VehicleContext(_rigidbody, _transform, carSpecNoGearbox, 0.02f, null, null, _wheelSpec, null, null);
 
             Vector3 initialVelocity = _rigidbody.linearVelocity;
 
             // Act
-            _driveModel.ApplyDrive(input, ref state, ctx);
+            _driveSystem.Tick(input, ref state, ctx);
 
             // Assert
             // Should not apply force without gearbox spec
@@ -359,7 +359,7 @@ namespace Vehicle.Tests.Engine
             var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f);
 
             // Act
-            _driveModel.ApplyDrive(input, ref state, ctx);
+            _driveSystem.Tick(input, ref state, ctx);
 
             // Assert
             // Should use wheelRadius from state (0.4) instead of wheelSpec (0.3)

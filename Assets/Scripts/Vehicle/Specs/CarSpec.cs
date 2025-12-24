@@ -4,34 +4,28 @@ namespace Vehicle.Specs
 {
     /// <summary>
     /// ScriptableObject containing all vehicle configuration parameters.
+    /// References to all component specifications (engine, gearbox, chassis, steering, etc.).
     /// Create instances of this asset to define different vehicle types or tuning presets.
     /// </summary>
     [CreateAssetMenu(menuName = "Vehicle/Car Spec", fileName = "CarSpec")]
     public sealed class CarSpec : ScriptableObject
     {
-        [Header("Rigidbody Defaults")]
-        /// <summary>
-        /// Minimum mass of the vehicle in kilograms. The rigidbody mass will be set to at least this value.
-        /// </summary>
-        [Min(1f)] public float minMass = 800f;
-        
+        [Header("Rigidbody Settings")]
         /// <summary>
         /// Linear damping (drag) applied to the rigidbody. Higher values reduce velocity faster.
         /// </summary>
-        [Min(0f)] public float linearDamping = 0.05f;
+        [Min(0f)]
+        [Tooltip("Linear damping applied to rigidbody. Higher = faster velocity reduction")]
+        public float linearDamping = 0.05f;
         
         /// <summary>
         /// Angular damping applied to the rigidbody. Higher values reduce rotation faster.
         /// </summary>
-        [Min(0f)] public float angularDamping = 0.5f;
-        
-        /// <summary>
-        /// Center of mass offset from the transform origin. Lower Y values make the vehicle more stable.
-        /// </summary>
-        public Vector3 centerOfMass = new Vector3(0f, -0.4f, 0f);
+        [Min(0f)]
+        [Tooltip("Angular damping applied to rigidbody. Higher = faster rotation reduction")]
+        public float angularDamping = 0.5f;
 
-
-        [Header("Engine System")]
+        [Header("Component Specifications")]
         /// <summary>
         /// Engine specification containing power/torque curves and RPM characteristics.
         /// Required for engine-based drive system.
@@ -47,21 +41,35 @@ namespace Vehicle.Specs
         public GearboxSpec gearboxSpec;
 
         /// <summary>
-        /// Wheel specification containing wheel parameters.
-        /// Optional, can be used by WheelModule or EngineDriveModel.
+        /// Wheel and tire specification containing wheel dimensions and tire properties.
         /// </summary>
-        [Tooltip("Wheel specification. Optional, used by WheelModule or EngineDriveModel.")]
+        [Tooltip("Wheel and tire specification.")]
         public WheelSpec wheelSpec;
 
-        [Header("Aerodynamics")]
         /// <summary>
-        /// Frontal area of the vehicle in square meters. Used for aerodynamic drag calculations.
+        /// Chassis specification containing mass, center of mass, aerodynamics, and mass distribution.
         /// </summary>
-        [Range(0.1f, 10f)] public float frontArea = 2.0f;
-        
+        [Tooltip("Chassis specification containing mass, center of mass, and aerodynamics.")]
+        public ChassisSpec chassisSpec;
+
         /// <summary>
-        /// Drag coefficient (Cd). Lower values mean less aerodynamic drag. Typical range: 0.2-0.5 for cars.
+        /// Steering specification containing steering geometry, tire grip, and yaw control.
         /// </summary>
-        [Range(0.1f, 2.0f)] public float dragCoefficient = 0.35f;
+        [Tooltip("Steering specification containing steering geometry and tire grip.")]
+        public SteeringSpec steeringSpec;
+
+        /// <summary>
+        /// Suspension specification containing spring, damping, and suspension geometry parameters.
+        /// Optional - placeholder for future suspension system implementation.
+        /// </summary>
+        [Tooltip("Suspension specification. Optional - placeholder for future implementation.")]
+        public SuspensionSpec suspensionSpec;
+
+        /// <summary>
+        /// Drivetrain specification containing drive type, torque distribution, and differential settings.
+        /// Optional - placeholder for future drivetrain system implementation.
+        /// </summary>
+        [Tooltip("Drivetrain specification. Optional - placeholder for future implementation.")]
+        public DrivetrainSpec drivetrainSpec;
     }
 }

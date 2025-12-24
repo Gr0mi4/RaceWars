@@ -48,6 +48,18 @@ namespace Vehicle.Core
         public readonly WheelSpec wheelSpec;
 
         /// <summary>
+        /// Chassis specification containing mass, center of mass, aerodynamics, and mass distribution.
+        /// Can be null if chassis parameters are not used.
+        /// </summary>
+        public readonly ChassisSpec chassisSpec;
+
+        /// <summary>
+        /// Steering specification containing steering geometry, tire grip, and yaw control.
+        /// Can be null if steering is not used.
+        /// </summary>
+        public readonly SteeringSpec steeringSpec;
+
+        /// <summary>
         /// Forward direction of the vehicle in world space.
         /// </summary>
         public Vector3 Forward => tr.forward;
@@ -70,12 +82,12 @@ namespace Vehicle.Core
         /// <param name="spec">The car specification.</param>
         /// <param name="dt">The fixed delta time.</param>
         public VehicleContext(Rigidbody rb, Transform tr, CarSpec spec, float dt)
-            : this(rb, tr, spec, dt, null, null, null)
+            : this(rb, tr, spec, dt, null, null, null, null, null)
         {
         }
 
         /// <summary>
-        /// Initializes a new instance of the VehicleContext with all parameters including engine, gearbox, and wheel specs.
+        /// Initializes a new instance of the VehicleContext with all parameters including all component specs.
         /// </summary>
         /// <param name="rb">The rigidbody component.</param>
         /// <param name="tr">The transform component.</param>
@@ -84,6 +96,8 @@ namespace Vehicle.Core
         /// <param name="engineSpec">Engine specification (optional).</param>
         /// <param name="gearboxSpec">Gearbox specification (optional).</param>
         /// <param name="wheelSpec">Wheel specification (optional).</param>
+        /// <param name="chassisSpec">Chassis specification (optional).</param>
+        /// <param name="steeringSpec">Steering specification (optional).</param>
         public VehicleContext(
             Rigidbody rb, 
             Transform tr, 
@@ -91,7 +105,9 @@ namespace Vehicle.Core
             float dt,
             EngineSpec engineSpec,
             GearboxSpec gearboxSpec,
-            WheelSpec wheelSpec)
+            WheelSpec wheelSpec,
+            ChassisSpec chassisSpec,
+            SteeringSpec steeringSpec)
         {
             this.rb = rb;
             this.tr = tr;
@@ -100,6 +116,8 @@ namespace Vehicle.Core
             this.engineSpec = engineSpec;
             this.gearboxSpec = gearboxSpec;
             this.wheelSpec = wheelSpec;
+            this.chassisSpec = chassisSpec;
+            this.steeringSpec = steeringSpec;
         }
     }
 }

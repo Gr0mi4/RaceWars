@@ -1,24 +1,24 @@
 using NUnit.Framework;
 using UnityEngine;
-using Vehicle.Modules.DriveModels;
+using Vehicle.Systems;
 using Vehicle.Specs;
 
 namespace Vehicle.Tests.Engine
 {
     /// <summary>
-    /// Unit tests for EngineModel.
+    /// Unit tests for EngineSystem.
     /// Tests RPM calculation, power/torque retrieval from curves, and wheel force calculation.
     /// </summary>
     [TestFixture]
     public class EngineModelTests
     {
-        private EngineModel _engineModel;
+        private EngineSystem _engineSystem;
         private EngineSpec _engineSpec;
 
         [SetUp]
         public void SetUp()
         {
-            _engineModel = new EngineModel();
+            _engineSystem = new EngineSystem();
             
             _engineSpec = ScriptableObject.CreateInstance<EngineSpec>();
             _engineSpec.maxPower = 110f; // HP
@@ -54,9 +54,9 @@ namespace Vehicle.Tests.Engine
 
             // Act
             // Step 1: Calculate wheel angular velocity from speed
-            float wheelAngularVelocity = _engineModel.CalculateWheelAngularVelocityFromSpeed(speed, wheelRadius);
+            float wheelAngularVelocity = _engineSystem.CalculateWheelAngularVelocityFromSpeed(speed, wheelRadius);
             // Step 2: Calculate engine RPM from wheel angular velocity
-            float rpm = _engineModel.CalculateEngineRPMFromWheel(wheelAngularVelocity, gearRatio, finalDriveRatio);
+            float rpm = _engineSystem.CalculateEngineRPMFromWheel(wheelAngularVelocity, gearRatio, finalDriveRatio);
 
             // Assert
             // Expected: RPM = (speed / (2π * wheelRadius)) * gearRatio * finalDriveRatio * 60
@@ -76,8 +76,8 @@ namespace Vehicle.Tests.Engine
             float finalDriveRatio = 3.9f;
 
             // Act
-            float wheelAngularVelocity = _engineModel.CalculateWheelAngularVelocityFromSpeed(speed, wheelRadius);
-            float rpm = _engineModel.CalculateEngineRPMFromWheel(wheelAngularVelocity, gearRatio, finalDriveRatio);
+            float wheelAngularVelocity = _engineSystem.CalculateWheelAngularVelocityFromSpeed(speed, wheelRadius);
+            float rpm = _engineSystem.CalculateEngineRPMFromWheel(wheelAngularVelocity, gearRatio, finalDriveRatio);
 
             // Assert
             Assert.AreEqual(0f, rpm, 0.001f);
@@ -93,8 +93,8 @@ namespace Vehicle.Tests.Engine
             float finalDriveRatio = 3.9f;
 
             // Act
-            float wheelAngularVelocity = _engineModel.CalculateWheelAngularVelocityFromSpeed(speed, wheelRadius);
-            float rpm = _engineModel.CalculateEngineRPMFromWheel(wheelAngularVelocity, gearRatio, finalDriveRatio);
+            float wheelAngularVelocity = _engineSystem.CalculateWheelAngularVelocityFromSpeed(speed, wheelRadius);
+            float rpm = _engineSystem.CalculateEngineRPMFromWheel(wheelAngularVelocity, gearRatio, finalDriveRatio);
 
             // Assert
             Assert.AreEqual(0f, rpm, 0.001f);
@@ -111,8 +111,8 @@ namespace Vehicle.Tests.Engine
 
             // Act
             // Use absolute value of speed for wheel angular velocity (direction doesn't matter for angular velocity)
-            float wheelAngularVelocity = _engineModel.CalculateWheelAngularVelocityFromSpeed(Mathf.Abs(speed), wheelRadius);
-            float rpm = _engineModel.CalculateEngineRPMFromWheel(wheelAngularVelocity, gearRatio, finalDriveRatio);
+            float wheelAngularVelocity = _engineSystem.CalculateWheelAngularVelocityFromSpeed(Mathf.Abs(speed), wheelRadius);
+            float rpm = _engineSystem.CalculateEngineRPMFromWheel(wheelAngularVelocity, gearRatio, finalDriveRatio);
 
             // Assert
             // RPM should be positive even for reverse (engine still spins forward)
@@ -127,7 +127,7 @@ namespace Vehicle.Tests.Engine
             float throttle = 1.0f; // Full throttle
 
             // Act
-            float power = _engineModel.GetPower(rpm, throttle, _engineSpec);
+            float power = _engineSystem.GetPower(rpm, throttle, _engineSpec);
 
             // Assert
             // At 4000 RPM: normalized = (4000-800)/(6500-800) ≈ 0.561
@@ -145,7 +145,7 @@ namespace Vehicle.Tests.Engine
             float throttle = 0f;
 
             // Act
-            float power = _engineModel.GetPower(rpm, throttle, _engineSpec);
+            float power = _engineSystem.GetPower(rpm, throttle, _engineSpec);
 
             // Assert
             Assert.AreEqual(0f, power, 0.001f);
@@ -159,7 +159,7 @@ namespace Vehicle.Tests.Engine
             float throttle = 1.0f;
 
             // Act
-            float power = _engineModel.GetPower(rpm, throttle, null);
+            float power = _engineSystem.GetPower(rpm, throttle, null);
 
             // Assert
             Assert.AreEqual(0f, power, 0.001f);
@@ -173,7 +173,7 @@ namespace Vehicle.Tests.Engine
             float throttle = 0.8f; // 80% throttle
 
             // Act
-            float torque = _engineModel.GetTorque(rpm, throttle, _engineSpec);
+            float torque = _engineSystem.GetTorque(rpm, throttle, _engineSpec);
 
             // Assert
             // At 3000 RPM: normalized = (3000-800)/(6500-800) ≈ 0.386
@@ -191,7 +191,7 @@ namespace Vehicle.Tests.Engine
             float throttle = 0f;
 
             // Act
-            float torque = _engineModel.GetTorque(rpm, throttle, _engineSpec);
+            float torque = _engineSystem.GetTorque(rpm, throttle, _engineSpec);
 
             // Assert
             Assert.AreEqual(0f, torque, 0.001f);
@@ -209,7 +209,7 @@ namespace Vehicle.Tests.Engine
             float wheelRadius = 0.3f;
 
             // Act
-            float force = _engineModel.CalculateWheelForce(
+            float force = _engineSystem.CalculateWheelForce(
                 speed, throttle, _engineSpec, currentRPM, gearRatio, finalDriveRatio, wheelRadius);
 
             // Assert
@@ -230,7 +230,7 @@ namespace Vehicle.Tests.Engine
             float wheelRadius = 0.3f;
 
             // Act
-            float force = _engineModel.CalculateWheelForce(
+            float force = _engineSystem.CalculateWheelForce(
                 speed, throttle, _engineSpec, currentRPM, gearRatio, finalDriveRatio, wheelRadius);
 
             // Assert
@@ -251,7 +251,7 @@ namespace Vehicle.Tests.Engine
             float wheelRadius = 0.3f;
 
             // Act
-            float force = _engineModel.CalculateWheelForce(
+            float force = _engineSystem.CalculateWheelForce(
                 speed, throttle, _engineSpec, currentRPM, gearRatio, finalDriveRatio, wheelRadius);
 
             // Assert
@@ -271,7 +271,7 @@ namespace Vehicle.Tests.Engine
             float wheelRadius = 0.3f;
 
             // Act
-            float force = _engineModel.CalculateWheelForce(
+            float force = _engineSystem.CalculateWheelForce(
                 speed, throttle, _engineSpec, currentRPM, gearRatio, finalDriveRatio, wheelRadius);
 
             // Assert
@@ -290,7 +290,7 @@ namespace Vehicle.Tests.Engine
             float wheelRadius = 0.3f;
 
             // Act
-            float force = _engineModel.CalculateWheelForce(
+            float force = _engineSystem.CalculateWheelForce(
                 speed, throttle, null, currentRPM, gearRatio, finalDriveRatio, wheelRadius);
 
             // Assert
@@ -298,4 +298,5 @@ namespace Vehicle.Tests.Engine
         }
     }
 }
+
 

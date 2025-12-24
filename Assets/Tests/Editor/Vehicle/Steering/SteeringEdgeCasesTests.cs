@@ -1,8 +1,8 @@
 using NUnit.Framework;
 using UnityEngine;
 using Vehicle.Core;
-using Vehicle.Modules.SteeringModels;
-using Vehicle.Specs.Modules.SteeringModels;
+using Vehicle.Systems;
+using Vehicle.Specs;
 
 namespace Vehicle.Tests.Steering
 {
@@ -39,14 +39,14 @@ namespace Vehicle.Tests.Steering
         public void PhysicsSteeringModel_VeryLowForwardSpeed_HandlesGracefully()
         {
             // Arrange
-            var spec = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.minForwardSpeed = 0.2f;
             spec.wheelbase = 2.8f;
             spec.maxSteerAngle = 32f;
             spec.baseMu = 0.75f;
             spec.yawResponseTime = 0.11f;
             spec.maxYawAccel = 11f;
-            var model = new PhysicsSteeringModel(spec);
+            var system = new SteeringSystem(spec);
 
             var input = new VehicleInput { steer = 1f };
             var state = new VehicleState
@@ -57,7 +57,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = model.ApplySteering(input, state, ctx, out float torque);
+            bool result = system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             Assert.IsFalse(result); // Should return false (steering disabled)
@@ -70,14 +70,14 @@ namespace Vehicle.Tests.Steering
         public void PhysicsSteeringModel_ZeroWheelbase_HandlesGracefully()
         {
             // Arrange
-            var spec = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.wheelbase = 0f; // Invalid
             spec.maxSteerAngle = 32f;
             spec.baseMu = 0.75f;
             spec.yawResponseTime = 0.11f;
             spec.maxYawAccel = 11f;
             spec.minForwardSpeed = 0.2f;
-            var model = new PhysicsSteeringModel(spec);
+            var system = new SteeringSystem(spec);
 
             var input = new VehicleInput { steer = 1f };
             var state = new VehicleState
@@ -88,7 +88,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act & Assert - should not throw or produce NaN
-            bool result = model.ApplySteering(input, state, ctx, out float torque);
+            bool result = system.ApplySteering(input, state, ctx, out float torque);
             Assert.IsTrue(float.IsFinite(torque) || !result);
 
             Object.DestroyImmediate(spec);
@@ -98,14 +98,14 @@ namespace Vehicle.Tests.Steering
         public void PhysicsSteeringModel_ExtremeSteerAngle_HandlesGracefully()
         {
             // Arrange
-            var spec = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.wheelbase = 2.8f;
             spec.maxSteerAngle = 90f; // Extreme angle
             spec.baseMu = 0.75f;
             spec.yawResponseTime = 0.11f;
             spec.maxYawAccel = 11f;
             spec.minForwardSpeed = 0.2f;
-            var model = new PhysicsSteeringModel(spec);
+            var system = new SteeringSystem(spec);
 
             var input = new VehicleInput { steer = 1f };
             var state = new VehicleState
@@ -116,7 +116,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = model.ApplySteering(input, state, ctx, out float torque);
+            bool result = system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             Assert.IsTrue(result);
@@ -129,7 +129,7 @@ namespace Vehicle.Tests.Steering
         public void PhysicsSteeringModel_SimultaneousBrakeAndThrottle_HandlesCorrectly()
         {
             // Arrange
-            var spec = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.wheelbase = 2.8f;
             spec.maxSteerAngle = 32f;
             spec.baseMu = 0.75f;
@@ -137,7 +137,7 @@ namespace Vehicle.Tests.Steering
             spec.yawResponseTime = 0.11f;
             spec.maxYawAccel = 11f;
             spec.minForwardSpeed = 0.2f;
-            var model = new PhysicsSteeringModel(spec);
+            var system = new SteeringSystem(spec);
 
             var input = new VehicleInput { steer = 1f, brake = 1f, throttle = 1f }; // Both pressed
             var state = new VehicleState
@@ -148,7 +148,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = model.ApplySteering(input, state, ctx, out float torque);
+            bool result = system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             Assert.IsTrue(result);
@@ -163,14 +163,14 @@ namespace Vehicle.Tests.Steering
         public void PhysicsSteeringModel_VeryHighYawRate_ClampsCorrectly()
         {
             // Arrange
-            var spec = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.wheelbase = 2.8f;
             spec.maxSteerAngle = 32f;
             spec.baseMu = 0.75f;
             spec.yawResponseTime = 0.11f;
             spec.maxYawAccel = 11f;
             spec.minForwardSpeed = 0.2f;
-            var model = new PhysicsSteeringModel(spec);
+            var system = new SteeringSystem(spec);
 
             var input = new VehicleInput { steer = 1f };
             var state = new VehicleState
@@ -181,7 +181,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = model.ApplySteering(input, state, ctx, out float torque);
+            bool result = system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             Assert.IsTrue(result);
@@ -193,14 +193,14 @@ namespace Vehicle.Tests.Steering
         public void PhysicsSteeringModel_NegativeMu_HandlesGracefully()
         {
             // Arrange
-            var spec = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.wheelbase = 2.8f;
             spec.maxSteerAngle = 32f;
             spec.baseMu = -0.5f; // Invalid negative
             spec.yawResponseTime = 0.11f;
             spec.maxYawAccel = 11f;
             spec.minForwardSpeed = 0.2f;
-            var model = new PhysicsSteeringModel(spec);
+            var system = new SteeringSystem(spec);
 
             var input = new VehicleInput { steer = 1f };
             var state = new VehicleState
@@ -211,7 +211,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act & Assert - should not throw or produce NaN
-            bool result = model.ApplySteering(input, state, ctx, out float torque);
+            bool result = system.ApplySteering(input, state, ctx, out float torque);
             Assert.IsTrue(float.IsFinite(torque) || !result);
 
             Object.DestroyImmediate(spec);
@@ -221,14 +221,14 @@ namespace Vehicle.Tests.Steering
         public void PhysicsSteeringModel_ZeroResponseTime_HandlesGracefully()
         {
             // Arrange
-            var spec = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.wheelbase = 2.8f;
             spec.maxSteerAngle = 32f;
             spec.baseMu = 0.75f;
             spec.yawResponseTime = 0f; // Invalid zero
             spec.maxYawAccel = 11f;
             spec.minForwardSpeed = 0.2f;
-            var model = new PhysicsSteeringModel(spec);
+            var system = new SteeringSystem(spec);
 
             var input = new VehicleInput { steer = 1f };
             var state = new VehicleState
@@ -241,7 +241,7 @@ namespace Vehicle.Tests.Steering
             // Act & Assert - should not throw (division by zero should be handled)
             Assert.DoesNotThrow(() =>
             {
-                model.ApplySteering(input, state, ctx, out float torque);
+                system.ApplySteering(input, state, ctx, out float torque);
             });
 
             Object.DestroyImmediate(spec);
@@ -251,14 +251,14 @@ namespace Vehicle.Tests.Steering
         public void PhysicsSteeringModel_SidewaysVelocity_SteeringStillWorks()
         {
             // Arrange
-            var spec = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.wheelbase = 2.8f;
             spec.maxSteerAngle = 32f;
             spec.baseMu = 0.75f;
             spec.yawResponseTime = 0.11f;
             spec.maxYawAccel = 11f;
             spec.minForwardSpeed = 0.2f;
-            var model = new PhysicsSteeringModel(spec);
+            var system = new SteeringSystem(spec);
 
             var input = new VehicleInput { steer = 1f };
             var state = new VehicleState
@@ -269,7 +269,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = model.ApplySteering(input, state, ctx, out float torque);
+            bool result = system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             // Should work because forward speed (0.5) is above minForwardSpeed (0.2)
@@ -283,7 +283,7 @@ namespace Vehicle.Tests.Steering
         public void PhysicsSteeringModel_FrictionCircleAtMaximum_ReducesGripToZero()
         {
             // Arrange
-            var spec = ScriptableObject.CreateInstance<PhysicsSteeringModelSpec>();
+            var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.wheelbase = 2.8f;
             spec.maxSteerAngle = 32f;
             spec.baseMu = 0.75f;
@@ -291,7 +291,7 @@ namespace Vehicle.Tests.Steering
             spec.yawResponseTime = 0.11f;
             spec.maxYawAccel = 11f;
             spec.minForwardSpeed = 0.2f;
-            var model = new PhysicsSteeringModel(spec);
+            var system = new SteeringSystem(spec);
 
             var input = new VehicleInput { steer = 1f, brake = 1f }; // Full brake
             var state = new VehicleState
@@ -302,7 +302,7 @@ namespace Vehicle.Tests.Steering
             var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
 
             // Act
-            bool result = model.ApplySteering(input, state, ctx, out float torque);
+            bool result = system.ApplySteering(input, state, ctx, out float torque);
 
             // Assert
             // With frictionCircleStrength = 1.0 and full brake, latGripFactor should be ~0

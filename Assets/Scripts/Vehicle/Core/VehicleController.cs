@@ -1,6 +1,9 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Vehicle.Input;
 using Vehicle.Specs;
+using Vehicle.Systems;
+using Vehicle.Debug;
 
 namespace Vehicle.Core
 {
@@ -13,11 +16,6 @@ namespace Vehicle.Core
     public sealed class VehicleController : MonoBehaviour
     {
         /// <summary>
-        /// Pipeline specification that defines which modules to use and their order.
-        /// </summary>
-        [SerializeField] private VehiclePipelineSpec pipelineSpec;
-        
-        /// <summary>
         /// Car specification containing vehicle parameters (mass, forces, aerodynamics, etc.).
         /// </summary>
         [SerializeField] private CarSpec carSpec;
@@ -26,6 +24,31 @@ namespace Vehicle.Core
         /// Input provider that supplies vehicle input from various sources (keyboard, gamepad, AI, etc.).
         /// </summary>
         [SerializeField] private VehicleInputProvider inputProvider;
+
+        /// <summary>
+        /// Air density for aerodynamic calculations (kg/m³). Default: 1.225 at sea level.
+        /// </summary>
+        [SerializeField] private float airDensity = 1.225f;
+
+        /// <summary>
+        /// Minimum speed (m/s) below which aerodynamic drag is not applied.
+        /// </summary>
+        [SerializeField] private float minSpeedForDrag = 0.1f;
+
+        /// <summary>
+        /// Enable telemetry logging for debugging.
+        /// </summary>
+        [SerializeField] private bool enableTelemetry = false;
+
+        /// <summary>
+        /// Telemetry logging interval in seconds.
+        /// </summary>
+        [SerializeField] private float telemetryInterval = 0.5f;
+
+        /// <summary>
+        /// Enable collision logging in telemetry.
+        /// </summary>
+        [SerializeField] private bool logCollisions = false;
 
         private VehiclePipeline _pipeline;
         private Rigidbody _rb;
@@ -44,8 +67,8 @@ namespace Vehicle.Core
                 yawRate = 0f,
                 engineRPM = 0f,
                 wheelAngularVelocity = 0f,
-                currentGear = 1, // Start in 1st gear (matches GearboxModel default)
-                wheelRadius = 0f // Will be set by WheelModule or use default from WheelSpec
+                currentGear = 1, // Start in 1st gear (matches GearboxSystem default)
+                wheelRadius = 0f // Will be set by WheelSystem or use default from WheelSpec
             };
             
             // Use serialized field if assigned, otherwise try to get component
@@ -57,11 +80,7 @@ namespace Vehicle.Core
             if (carSpec != null)
             {
                 ApplyRigidbodyDefaults();
-            }
-
-            if (pipelineSpec != null)
-            {
-                _pipeline = pipelineSpec.CreatePipeline();
+                _pipeline = CreatePipeline();
             }
         }
 
@@ -70,11 +89,17 @@ namespace Vehicle.Core
         /// </summary>
         private void ApplyRigidbodyDefaults()
         {
-            _rb.mass = Mathf.Max(_rb.mass, carSpec.minMass);
+            // Mass and center of mass from ChassisSpec
+            if (carSpec?.chassisSpec != null)
+            {
+                _rb.mass = Mathf.Max(_rb.mass, carSpec.chassisSpec.mass);
+                _rb.centerOfMass = carSpec.chassisSpec.centerOfMass;
+            }
+            
+            // Damping from CarSpec
             RigidbodyCompat.SetLinearDamping(_rb, carSpec.linearDamping);
             RigidbodyCompat.SetAngularDamping(_rb, carSpec.angularDamping);
             _rb.useGravity = true;
-            _rb.centerOfMass = carSpec.centerOfMass;
         }
 
         /// <summary>
@@ -86,7 +111,7 @@ namespace Vehicle.Core
                 return;
 
             UpdateState();
-            // Create context with engine, gearbox, and wheel specs from CarSpec
+            // Create context with all specs from CarSpec
             var ctx = new VehicleContext(
                 _rb, 
                 transform, 
@@ -94,7 +119,9 @@ namespace Vehicle.Core
                 Time.fixedDeltaTime,
                 carSpec?.engineSpec,
                 carSpec?.gearboxSpec,
-                carSpec?.wheelSpec
+                carSpec?.wheelSpec,
+                carSpec?.chassisSpec,
+                carSpec?.steeringSpec
             );
             var input = inputProvider.CurrentInput;
 
@@ -106,13 +133,73 @@ namespace Vehicle.Core
         }
 
         /// <summary>
+        /// Creates the fixed vehicle pipeline with all systems in the correct order.
+        /// This defines the sequence of forces applied to all vehicles.
+        /// </summary>
+        /// <returns>A new VehiclePipeline with all systems configured.</returns>
+        private VehiclePipeline CreatePipeline()
+        {
+            var modules = new List<IVehicleModule>();
+
+            // 1. Wheel System - stores wheel radius and applies lateral grip
+            if (carSpec?.wheelSpec != null)
+            {
+                modules.Add(new WheelSystem(
+                    carSpec.wheelSpec.wheelRadius,
+                    carSpec.wheelSpec.sideGrip,
+                    carSpec.wheelSpec.handbrakeGripMultiplier
+                ));
+            }
+
+            // 2. Drive System - applies engine/gearbox forces
+            if (carSpec?.engineSpec != null && carSpec?.gearboxSpec != null)
+            {
+                modules.Add(new DriveSystem(forceMultiplier: 1.0f));
+            }
+
+            // 3. Steering System - applies yaw torque
+            if (carSpec?.steeringSpec != null)
+            {
+                modules.Add(new SteeringSystem(carSpec.steeringSpec));
+            }
+
+            // 4. Aerodynamic Drag System - applies drag force
+            if (carSpec?.chassisSpec != null)
+            {
+                modules.Add(new AerodragSystem(airDensity, minSpeedForDrag));
+            }
+
+            // 5. Suspension System - placeholder for future implementation
+            if (carSpec?.suspensionSpec != null)
+            {
+                modules.Add(new SuspensionSystem());
+            }
+
+            // 6. Drivetrain System - placeholder for future implementation
+            if (carSpec?.drivetrainSpec != null)
+            {
+                modules.Add(new DrivetrainSystem());
+            }
+
+            // 7. Telemetry System - debug/utility (optional)
+            if (enableTelemetry)
+            {
+                modules.Add(new TelemetrySystem(enableTelemetry, telemetryInterval, logCollisions));
+            }
+
+            return new VehiclePipeline(modules);
+        }
+
+        /// <summary>
         /// Updates the vehicle state from the current rigidbody properties.
+        /// This replaces the old StateCollectorModule functionality.
         /// </summary>
         private void UpdateState()
         {
-            _state.worldVelocity = RigidbodyCompat.GetVelocity(_rb);
-            _state.localVelocity = transform.InverseTransformDirection(_state.worldVelocity);
-            _state.speed = _state.localVelocity.magnitude;
+            Vector3 v = RigidbodyCompat.GetVelocity(_rb);
+            _state.worldVelocity = v;
+            _state.speed = v.magnitude;
+            _state.localVelocity = transform.InverseTransformDirection(v);
             _state.yawRate = _rb.angularVelocity.y;
         }
 
@@ -132,7 +219,9 @@ namespace Vehicle.Core
                 Time.fixedDeltaTime,
                 carSpec?.engineSpec,
                 carSpec?.gearboxSpec,
-                carSpec?.wheelSpec
+                carSpec?.wheelSpec,
+                carSpec?.chassisSpec,
+                carSpec?.steeringSpec
             );
             _pipeline.NotifyCollision(collision, ctx, ref _state);
         }
