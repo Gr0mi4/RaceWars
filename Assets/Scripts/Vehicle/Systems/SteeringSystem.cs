@@ -13,6 +13,7 @@ namespace Vehicle.Systems
         private readonly SteeringSpec _spec;
         private const float Epsilon = 0.001f;
         private const float GravityMagnitude = 9.81f;
+        private const float SteerExpo = 1.5f; // soften around center
 
         /// <summary>
         /// Initializes a new instance of the SteeringSystem.
@@ -32,10 +33,6 @@ namespace Vehicle.Systems
                 if (_spec.wheelbase < Epsilon)
                 {
                     UnityEngine.Debug.LogWarning($"[SteeringSystem] Invalid wheelbase ({_spec.wheelbase}), using default 2.8m");
-                }
-                if (_spec.baseMu < Epsilon)
-                {
-                    UnityEngine.Debug.LogWarning($"[SteeringSystem] Invalid baseMu ({_spec.baseMu}), using default 0.75");
                 }
             }
         }
@@ -89,16 +86,21 @@ namespace Vehicle.Systems
                 return false;
             }
 
-            // 1. Bicycle model: desired yaw rate from steer angle
-            float steerAngleDeg = input.steer * _spec.maxSteerAngle;
+            float steerInput = ApplySteerCurve(input.steer);
+            float steerAngleDeg = steerInput * _spec.maxSteerAngle * GetSpeedSteerScale(absVx);
             float steerAngleRad = steerAngleDeg * Mathf.Deg2Rad;
-            
+
+            // 1. Bicycle model: desired yaw rate from steer angle
             // Use absolute forward speed for calculations (works for both forward and reverse)
             float effectiveVx = Mathf.Max(absVx, _spec.minForwardSpeed);
             float yawRateDesired = (effectiveVx / _spec.wheelbase) * Mathf.Tan(steerAngleRad);
 
             // 2. Base grip limit (friction-based)
-            float ayMax = _spec.baseMu * GravityMagnitude;
+            float baseMu = ctx.wheelSpec != null && ctx.wheelSpec.friction > Epsilon
+                ? ctx.wheelSpec.friction
+                : 0.8f;
+
+            float ayMax = baseMu * GravityMagnitude;
             float yawRateMaxBase = ayMax / effectiveVx;
 
             // 3. Friction circle: reduce lateral grip during braking/acceleration
@@ -127,6 +129,10 @@ namespace Vehicle.Systems
             float momentOfInertia = ctx.rb.mass * _spec.wheelbase * _spec.wheelbase;
             yawTorque = yawAccel * momentOfInertia;
 
+            // Apply low-speed yaw scaling
+            float lowSpeedScale = GetLowSpeedYawScale(absVx);
+            yawTorque *= lowSpeedScale;
+
             // Validate output (prevent NaN/Infinity)
             if (!float.IsFinite(yawTorque))
             {
@@ -141,6 +147,34 @@ namespace Vehicle.Systems
 
             return true;
         }
+
+        private float ApplySteerCurve(float rawInput)
+        {
+            float sign = Mathf.Sign(rawInput);
+            float mag = Mathf.Pow(Mathf.Abs(rawInput), SteerExpo);
+            return sign * mag;
+        }
+
+        private float GetSpeedSteerScale(float speed)
+        {
+            float s0 = Mathf.Max(Epsilon, _spec.steerReductionStartSpeed);
+            float s1 = Mathf.Max(s0 + Epsilon, _spec.steerReductionEndSpeed);
+            if (speed <= s0) return 1f;
+            if (speed >= s1) return _spec.highSpeedSteerMultiplier;
+            float t = (speed - s0) / (s1 - s0);
+            return Mathf.Lerp(1f, _spec.highSpeedSteerMultiplier, t);
+        }
+
+        private float GetLowSpeedYawScale(float speed)
+        {
+            float s0 = Mathf.Max(Epsilon, _spec.lowSpeedYawStart);
+            float s1 = Mathf.Max(s0 + Epsilon, _spec.lowSpeedYawEnd);
+            if (speed <= s0) return _spec.lowSpeedYawMultiplier;
+            if (speed >= s1) return 1f;
+            float t = (speed - s0) / (s1 - s0);
+            return Mathf.Lerp(_spec.lowSpeedYawMultiplier, 1f, t);
+        }
+
     }
 }
 

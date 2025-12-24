@@ -60,6 +60,18 @@ namespace Vehicle.Core
         public readonly SteeringSpec steeringSpec;
 
         /// <summary>
+        /// Suspension specification containing spring/damper/travel parameters.
+        /// Can be null if suspension is not used.
+        /// </summary>
+        public readonly SuspensionSpec suspensionSpec;
+
+        /// <summary>
+        /// Drivetrain specification containing drive type and torque distribution.
+        /// Can be null if drivetrain is not used.
+        /// </summary>
+        public readonly DrivetrainSpec drivetrainSpec;
+
+        /// <summary>
         /// Forward direction of the vehicle in world space.
         /// </summary>
         public Vector3 Forward => tr.forward;
@@ -82,7 +94,43 @@ namespace Vehicle.Core
         /// <param name="spec">The car specification.</param>
         /// <param name="dt">The fixed delta time.</param>
         public VehicleContext(Rigidbody rb, Transform tr, CarSpec spec, float dt)
-            : this(rb, tr, spec, dt, null, null, null, null, null)
+            : this(rb, tr, spec, dt, null, null, null, null, null, null, null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the VehicleContext with component specs (compatibility overload).
+        /// </summary>
+        public VehicleContext(
+            Rigidbody rb,
+            Transform tr,
+            CarSpec spec,
+            float dt,
+            EngineSpec engineSpec,
+            GearboxSpec gearboxSpec,
+            WheelSpec wheelSpec,
+            ChassisSpec chassisSpec,
+            SteeringSpec steeringSpec,
+            SuspensionSpec suspensionSpec)
+            : this(rb, tr, spec, dt, engineSpec, gearboxSpec, wheelSpec, chassisSpec, steeringSpec, suspensionSpec, null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the VehicleContext with drivetrain (no suspension override).
+        /// </summary>
+        public VehicleContext(
+            Rigidbody rb,
+            Transform tr,
+            CarSpec spec,
+            float dt,
+            EngineSpec engineSpec,
+            GearboxSpec gearboxSpec,
+            WheelSpec wheelSpec,
+            ChassisSpec chassisSpec,
+            SteeringSpec steeringSpec,
+            DrivetrainSpec drivetrainSpec)
+            : this(rb, tr, spec, dt, engineSpec, gearboxSpec, wheelSpec, chassisSpec, steeringSpec, null, drivetrainSpec)
         {
         }
 
@@ -98,6 +146,7 @@ namespace Vehicle.Core
         /// <param name="wheelSpec">Wheel specification (optional).</param>
         /// <param name="chassisSpec">Chassis specification (optional).</param>
         /// <param name="steeringSpec">Steering specification (optional).</param>
+        /// <param name="suspensionSpec">Suspension specification (optional).</param>
         public VehicleContext(
             Rigidbody rb, 
             Transform tr, 
@@ -107,7 +156,9 @@ namespace Vehicle.Core
             GearboxSpec gearboxSpec,
             WheelSpec wheelSpec,
             ChassisSpec chassisSpec,
-            SteeringSpec steeringSpec)
+            SteeringSpec steeringSpec,
+            SuspensionSpec suspensionSpec,
+            DrivetrainSpec drivetrainSpec)
         {
             this.rb = rb;
             this.tr = tr;
@@ -118,6 +169,8 @@ namespace Vehicle.Core
             this.wheelSpec = wheelSpec;
             this.chassisSpec = chassisSpec;
             this.steeringSpec = steeringSpec;
+            this.suspensionSpec = suspensionSpec;
+            this.drivetrainSpec = drivetrainSpec;
         }
     }
 }

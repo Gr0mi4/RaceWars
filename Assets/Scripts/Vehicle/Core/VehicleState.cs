@@ -8,6 +8,11 @@ namespace Vehicle.Core
     public struct VehicleState
     {
         /// <summary>
+        /// Runtime per-wheel data (contact, forces, pose).
+        /// </summary>
+        public WheelRuntime[] wheels;
+
+        /// <summary>
         /// Velocity of the vehicle in world space (m/s).
         /// </summary>
         public Vector3 worldVelocity;
@@ -50,5 +55,18 @@ namespace Vehicle.Core
         /// Wheel radius in meters. Set by wheel modules.
         /// </summary>
         public float wheelRadius;
+    }
+
+    /// <summary>
+    /// Per-wheel runtime data used by suspension/drive/steering systems.
+    /// </summary>
+    public struct WheelRuntime
+    {
+        public bool isGrounded;
+        public Vector3 contactPoint;
+        public Vector3 surfaceNormal;
+        public float normalForce;
+        public float compression;
+        public float angularVelocity;
     }
 }

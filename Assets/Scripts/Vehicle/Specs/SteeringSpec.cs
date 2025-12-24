@@ -22,19 +22,55 @@ namespace Vehicle.Specs
         /// Maximum steering angle in degrees.
         /// Typical: 30-35° for realistic feel
         /// </summary>
-        [Range(20f, 50f)]
-        [Tooltip("Maximum steering angle in degrees. Typical: 30-35° for realistic feel")]
+        [Range(10f, 50f)]
+        [Tooltip("Maximum steering angle in degrees. Typical: 28-32° for realistic feel")]
         public float maxSteerAngle = 32f;
 
-        [Header("Tire Grip")]
+        [Header("Speed-Based Steer")]
         /// <summary>
-        /// Base friction coefficient (μ).
-        /// Driver-style: ~0.7-0.8 for realistic tire limits
+        /// Steer multiplier at high speed (0..1). 1 = no reduction.
         /// </summary>
-        [Range(0.1f, 3f)]
-        [Tooltip("Base friction coefficient (μ). Driver-style: ~0.7-0.8 for realistic tire limits")]
-        public float baseMu = 1.5f;
-        
+        [Range(0.1f, 1f)]
+        [Tooltip("Steer multiplier at high speed. 1 = no reduction.")]
+        public float highSpeedSteerMultiplier = 0.5f;
+
+        /// <summary>
+        /// Speed (m/s) at which steer starts to reduce.
+        /// </summary>
+        [Min(0.1f)]
+        [Tooltip("Speed (m/s) where steer reduction begins.")]
+        public float steerReductionStartSpeed = 10f; // ~36 km/h
+
+        /// <summary>
+        /// Speed (m/s) where steer reduction reaches highSpeedSteerMultiplier.
+        /// </summary>
+        [Min(0.1f)]
+        [Tooltip("Speed (m/s) where steer reduction reaches highSpeedSteerMultiplier.")]
+        public float steerReductionEndSpeed = 30f; // ~108 km/h
+
+        [Header("Low-Speed Yaw Scaling")]
+        /// <summary>
+        /// Steer/yaw multiplier at very low speed (0..1). Lower = less agile at crawl.
+        /// </summary>
+        [Range(0.1f, 1f)]
+        [Tooltip("Steer/yaw multiplier at low speed. Lower = less agile when slow.")]
+        public float lowSpeedYawMultiplier = 0.6f;
+
+        /// <summary>
+        /// Speed (m/s) below which low-speed multiplier is applied fully.
+        /// </summary>
+        [Min(0.01f)]
+        [Tooltip("Speed (m/s) where low-speed reduction is strongest.")]
+        public float lowSpeedYawStart = 0.5f; // 1.8 km/h
+
+        /// <summary>
+        /// Speed (m/s) where low-speed reduction fades out to 1.0.
+        /// </summary>
+        [Min(0.01f)]
+        [Tooltip("Speed (m/s) where low-speed reduction ends.")]
+        public float lowSpeedYawEnd = 8f; // ~29 km/h
+
+        [Header("Tire Grip Coupling")]
         /// <summary>
         /// How strongly longitudinal usage (brake/throttle) reduces lateral grip.
         /// Driver-style: ~0.9-1.0 for strong coupling

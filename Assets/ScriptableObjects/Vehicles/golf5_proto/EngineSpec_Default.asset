@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 47b714f0706b44812a717f89404ebb35, type: 3}
   m_Name: EngineSpec_Default
   m_EditorClassIdentifier: Assembly-CSharp::Vehicle.Specs.EngineSpec
-  maxPower: 110
-  maxTorque: 155
+  maxPower: 120
+  maxTorque: 150
   maxRPM: 6500
   idleRPM: 800
   idleTorque: 25

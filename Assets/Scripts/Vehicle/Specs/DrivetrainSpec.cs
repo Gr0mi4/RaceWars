@@ -14,7 +14,15 @@ namespace Vehicle.Specs
     [CreateAssetMenu(menuName = "Vehicle/Drivetrain Spec", fileName = "DrivetrainSpec")]
     public sealed class DrivetrainSpec : ScriptableObject
     {
-        // TODO: Add drivetrain parameters when implementing drivetrain system
+        public enum DriveType
+        {
+            FWD,
+            RWD,
+            AWD
+        }
+
+        [Tooltip("Drive type: FWD, RWD, or AWD. Default: FWD.")]
+        public DriveType driveType = DriveType.FWD;
     }
 }
 

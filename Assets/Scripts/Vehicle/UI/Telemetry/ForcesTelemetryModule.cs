@@ -27,6 +27,10 @@ namespace Vehicle.UI.Telemetry
             float wheelForce = 0f;
             float dragForce = 0f;
             float dampingForce = 0f;
+            float normalLoadTotal = 0f;
+            float normalLoadFront = 0f;
+            float normalLoadRear = 0f;
+            float rollingResistance = 0f;
 
             // Calculate drag force
             if (ctx.chassisSpec != null)
@@ -43,6 +47,21 @@ namespace Vehicle.UI.Telemetry
                 if (speed > 0.001f)
                 {
                     dampingForce = linearDamping * speed * ctx.rb.mass;
+                }
+            }
+
+            // Collect normal loads from suspension
+            if (state.wheels != null && state.wheels.Length > 0)
+            {
+                for (int i = 0; i < state.wheels.Length; i++)
+                {
+                    var n = Mathf.Max(0f, state.wheels[i].normalForce);
+                    normalLoadTotal += n;
+                    if (i < 2) normalLoadFront += n;
+                    else normalLoadRear += n;
+
+                    float crr = ctx.wheelSpec != null ? ctx.wheelSpec.rollingResistance : 0f;
+                    rollingResistance += crr * n;
                 }
             }
 
@@ -105,6 +124,16 @@ namespace Vehicle.UI.Telemetry
             text += FormatValue("Drag Force", dragForce, "N", 0) + $" ({dragPowerHP:F1} HP)\n";
             text += FormatValue("Damping Force", dampingForce, "N", 0) + $" ({dampingPowerHP:F1} HP)\n";
             text += FormatValue("Net Force", netForce, "N", 0) + $" ({netPowerHP:F1} HP)\n";
+            if (normalLoadTotal > 0f)
+            {
+                text += FormatValue("Normal Total", normalLoadTotal, "N", 0);
+                text += FormatValue("Normal Front", normalLoadFront, "N", 0);
+                text += FormatValue("Normal Rear", normalLoadRear, "N", 0);
+            }
+            if (rollingResistance > 0f)
+            {
+                text += FormatValue("Rolling Resistance", rollingResistance, "N", 0);
+            }
             text += FormatValue("Mass", ctx.rb.mass, "kg", 1);
             return text;
         }

@@ -17,7 +17,7 @@ MonoBehaviour:
   engineSpec: {fileID: 11400000, guid: c2cc44e6cf6194975b28371b0eaf182e, type: 2}
   gearboxSpec: {fileID: 11400000, guid: f49d23c7f15ea4f80ad96e52ad521be9, type: 2}
   wheelSpec: {fileID: 11400000, guid: c071f3c5c29dd4236bf1ee9ffe7fdd58, type: 2}
-  chassisSpec: {fileID: 0}
-  steeringSpec: {fileID: 0}
-  suspensionSpec: {fileID: 0}
-  drivetrainSpec: {fileID: 0}
+  chassisSpec: {fileID: 11400000, guid: 8f7356ca0d6eb4f62adaf42a61c6d6e0, type: 2}
+  steeringSpec: {fileID: 11400000, guid: 658a478e1613e4e62948ebefecc624a8, type: 2}
+  suspensionSpec: {fileID: 11400000, guid: 1d4173f92f70f4ad09d4fea1572f0850, type: 2}
+  drivetrainSpec: {fileID: 11400000, guid: ebc759014e2084511a32f732d98353ed, type: 2}

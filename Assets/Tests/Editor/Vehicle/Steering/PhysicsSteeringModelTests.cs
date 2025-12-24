@@ -18,6 +18,7 @@ namespace Vehicle.Tests.Steering
         private GameObject _gameObject;
         private Rigidbody _rigidbody;
         private Transform _transform;
+        private WheelSpec _wheelSpec;
 
         [SetUp]
         public void SetUp()
@@ -26,7 +27,6 @@ namespace Vehicle.Tests.Steering
             _spec = ScriptableObject.CreateInstance<SteeringSpec>();
             _spec.wheelbase = 2.8f;
             _spec.maxSteerAngle = 32f;
-            _spec.baseMu = 0.75f;
             _spec.frictionCircleStrength = 0.95f;
             _spec.handbrakeGripMultiplier = 0.2f;
             _spec.yawResponseTime = 0.11f;
@@ -40,6 +40,8 @@ namespace Vehicle.Tests.Steering
             _rigidbody = _gameObject.AddComponent<Rigidbody>();
             _rigidbody.mass = 1000f;
             _transform = _gameObject.transform;
+            _wheelSpec = ScriptableObject.CreateInstance<WheelSpec>();
+            _wheelSpec.friction = 0.75f;
         }
 
         [TearDown]
@@ -53,6 +55,10 @@ namespace Vehicle.Tests.Steering
             {
                 Object.DestroyImmediate(_spec);
             }
+            if (_wheelSpec != null)
+            {
+                Object.DestroyImmediate(_wheelSpec);
+            }
         }
 
         [Test]
@@ -65,7 +71,7 @@ namespace Vehicle.Tests.Steering
                 localVelocity = new Vector3(0f, 0f, 10f), // Moving forward
                 yawRate = 0f
             };
-            var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
+            var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f, null, null, _wheelSpec, null, _spec, null, null);
 
             // Act
             bool result = _system.ApplySteering(input, state, ctx, out float torque);
@@ -85,7 +91,7 @@ namespace Vehicle.Tests.Steering
                 localVelocity = new Vector3(0f, 0f, 0f), // Not moving
                 yawRate = 0f
             };
-            var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
+            var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f, null, null, _wheelSpec, null, _spec, null, null);
 
             // Act
             bool result = _system.ApplySteering(input, state, ctx, out float torque);
@@ -105,7 +111,7 @@ namespace Vehicle.Tests.Steering
                 localVelocity = new Vector3(0f, 0f, 0.1f), // Below minForwardSpeed (0.2)
                 yawRate = 0f
             };
-            var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
+            var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f, null, null, _wheelSpec, null, _spec, null, null);
 
             // Act
             bool result = _system.ApplySteering(input, state, ctx, out float torque);
@@ -125,7 +131,7 @@ namespace Vehicle.Tests.Steering
                 localVelocity = new Vector3(0f, 0f, 10f), // 10 m/s forward
                 yawRate = 0f
             };
-            var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
+            var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f, null, null, _wheelSpec, null, _spec, null, null);
 
             // Act
             bool result = _system.ApplySteering(input, state, ctx, out float torque);
@@ -359,7 +365,6 @@ namespace Vehicle.Tests.Steering
             // Arrange
             var invalidSpec = ScriptableObject.CreateInstance<SteeringSpec>();
             invalidSpec.wheelbase = 0f; // Invalid
-            invalidSpec.baseMu = -1f; // Invalid
             var system = new SteeringSystem(invalidSpec);
             var input = new VehicleInput { steer = 1f };
             var state = new VehicleState
@@ -367,7 +372,8 @@ namespace Vehicle.Tests.Steering
                 localVelocity = new Vector3(0f, 0f, 10f),
                 yawRate = 0f
             };
-            var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
+            _wheelSpec.friction = -1f; // Invalid friction
+            var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f, null, null, _wheelSpec, null, invalidSpec, null, null);
 
             // Act & Assert - should not throw or produce NaN
             bool result = system.ApplySteering(input, state, ctx, out float torque);
@@ -385,7 +391,6 @@ namespace Vehicle.Tests.Steering
             specStrong.frictionCircleStrength = 1.0f; // Maximum coupling
             specStrong.wheelbase = 2.8f;
             specStrong.maxSteerAngle = 32f;
-            specStrong.baseMu = 0.75f;
             specStrong.yawResponseTime = 0.11f;
             specStrong.maxYawAccel = 11f;
             specStrong.minForwardSpeed = 0.2f;
@@ -395,7 +400,6 @@ namespace Vehicle.Tests.Steering
             specWeak.frictionCircleStrength = 0.5f; // Weak coupling
             specWeak.wheelbase = 2.8f;
             specWeak.maxSteerAngle = 32f;
-            specWeak.baseMu = 0.75f;
             specWeak.yawResponseTime = 0.11f;
             specWeak.maxYawAccel = 11f;
             specWeak.minForwardSpeed = 0.2f;
@@ -407,7 +411,7 @@ namespace Vehicle.Tests.Steering
                 localVelocity = new Vector3(0f, 0f, 10f),
                 yawRate = 0f
             };
-            var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f);
+            var ctx = new VehicleContext(_rigidbody, _transform, null, 0.02f, null, null, _wheelSpec, null, specStrong, null, null);
 
             // Act
             systemStrong.ApplySteering(input, state, ctx, out float torqueStrong);

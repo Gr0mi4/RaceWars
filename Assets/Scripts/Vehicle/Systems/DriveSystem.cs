@@ -1,3 +1,7 @@
+using System.Linq;
+using System.IO;
+using System.Text;
+using System.Globalization;
 using UnityEngine;
 using Vehicle.Core;
 using Vehicle.Specs;
@@ -22,6 +26,7 @@ namespace Vehicle.Systems
         private const float LowSpeedThreshold = 1.0f;
         private const float RevLimiterMinThrottle = 0.1f;
         private const float MinForceMultiplier = 0.01f;
+        private const float GravityMagnitude = 9.81f;
 
         private readonly EngineSystem _engineSystem;
         private GearboxSystem _gearboxSystem;
@@ -150,10 +155,11 @@ namespace Vehicle.Systems
         /// <summary>
         /// Validates required specifications and initializes gearbox system if needed.
         /// </summary>
-        private bool ValidateAndInitialize(in VehicleContext ctx, in VehicleState state, out EngineSpec engineSpec, out GearboxSpec gearboxSpec, out float wheelRadius)
+        private bool ValidateAndInitialize(in VehicleContext ctx, in VehicleState state, out EngineSpec engineSpec, out GearboxSpec gearboxSpec, out WheelSpec wheelSpec, out float wheelRadius)
         {
             engineSpec = ctx.engineSpec ?? ctx.spec?.engineSpec;
             gearboxSpec = ctx.gearboxSpec ?? ctx.spec?.gearboxSpec;
+            wheelSpec = ctx.wheelSpec ?? ctx.spec?.wheelSpec;
 
             if (engineSpec == null || gearboxSpec == null)
             {
@@ -175,7 +181,7 @@ namespace Vehicle.Systems
 
             wheelRadius = state.wheelRadius > MinWheelRadiusThreshold 
                 ? state.wheelRadius 
-                : (ctx.wheelSpec != null ? ctx.wheelSpec.wheelRadius : DefaultWheelRadius);
+                : (wheelSpec != null ? wheelSpec.wheelRadius : DefaultWheelRadius);
 
             return true;
         }
@@ -256,7 +262,7 @@ namespace Vehicle.Systems
         /// Calculates engine torque, wheel torque, and applies force to the vehicle.
         /// </summary>
         private void CalculateAndApplyForce(float speed, float wheelRadius, float gearRatio, float finalDriveRatio,
-            float throttle, EngineSpec engineSpec, GearboxSpec gearboxSpec, bool gearEngaged, in VehicleContext ctx)
+            float throttle, EngineSpec engineSpec, GearboxSpec gearboxSpec, WheelSpec wheelSpec, bool gearEngaged, in VehicleContext ctx, ref VehicleState state)
         {
             float actualEngineRPM = CalculateActualEngineRPM(speed, wheelRadius, gearRatio, finalDriveRatio);
             bool engineAtRPMLimit = actualEngineRPM >= engineSpec.maxRPM;
@@ -286,27 +292,183 @@ namespace Vehicle.Systems
                 wheelTorque = engineTorque * absGearRatio * finalDriveRatio;
             }
 
-            float wheelForce = 0f;
-            if (wheelRadius > MinWheelRadiusThreshold && wheelTorque > 0f)
+            // Guard for over-speed
+            bool allowForce = _clutchEngaged && gearEngaged && wheelTorque > 0f;
+            if (allowForce && maxSpeedForGear > MinSpeedThreshold && Mathf.Abs(speed) >= maxSpeedForGear)
             {
-                wheelForce = wheelTorque / wheelRadius;
+                allowForce = false;
             }
 
-            bool canApplyForce = _clutchEngaged && gearEngaged && wheelForce > 0f;
-            if (canApplyForce)
+            if (!allowForce)
             {
-                if (maxSpeedForGear > MinSpeedThreshold && Mathf.Abs(speed) >= maxSpeedForGear)
-                {
-                    canApplyForce = false;
-                }
+                return;
             }
 
-            if (canApplyForce)
+            // Per-wheel application using contact data
+            int wheelCount = state.wheels != null ? state.wheels.Length : 0;
+            if (wheelSpec == null || wheelCount == 0)
             {
-                wheelForce *= _forceMultiplier;
+                // Fallback: center force
+                float wheelForceCenter = (wheelRadius > MinWheelRadiusThreshold && wheelTorque > 0f)
+                    ? wheelTorque / wheelRadius
+                    : 0f;
+                wheelForceCenter *= _forceMultiplier;
                 Vector3 forceDirection = Mathf.Sign(gearRatio) > 0 ? ctx.Forward : -ctx.Forward;
-                Vector3 force = forceDirection * Mathf.Abs(wheelForce);
+                Vector3 force = forceDirection * Mathf.Abs(wheelForceCenter);
                 ctx.rb.AddForce(force, ForceMode.Force);
+
+                // #region agent log
+                AppendLog("Drive:centerFallback", "H3",
+                    ("wheelForceCenter", wheelForceCenter),
+                    ("gearRatio", gearRatio),
+                    ("speed", speed),
+                    ("runId", "pre-fix"),
+                    ("location", "DriveSystem.CalculateAndApplyForce"));
+                // #endregion
+                return;
+            }
+
+            var driveType = ctx.drivetrainSpec != null ? ctx.drivetrainSpec.driveType : DrivetrainSpec.DriveType.FWD;
+            int[] driven = driveType switch
+            {
+                DrivetrainSpec.DriveType.RWD => new[] { 2, 3 },
+                DrivetrainSpec.DriveType.AWD => System.Linq.Enumerable.Range(0, wheelCount).ToArray(),
+                _ => new[] { 0, 1 } // FWD default
+            };
+            driven = System.Array.FindAll(driven, idx => idx >= 0 && idx < wheelCount);
+            if (driven.Length == 0)
+            {
+                return;
+            }
+
+            int groundedDriven = 0;
+            foreach (int idx in driven)
+            {
+                if (state.wheels[idx].isGrounded) groundedDriven++;
+            }
+            if (groundedDriven == 0)
+            {
+                // #region agent log
+                AppendLog("Drive:noGroundedDriven", "H4",
+                    ("driven", driven.Length),
+                    ("wheelCount", wheelCount),
+                    ("runId", "pre-fix"),
+                    ("location", "DriveSystem.CalculateAndApplyForce"));
+                // #endregion
+                return;
+            }
+
+            float perWheelTorque = wheelTorque / driven.Length;
+            float perWheelForce = (wheelRadius > MinWheelRadiusThreshold && perWheelTorque > 0f)
+                ? perWheelTorque / wheelRadius
+                : 0f;
+            perWheelForce *= _forceMultiplier;
+
+            // #region agent log
+            AppendLog("Drive:allowForce", "H2",
+                ("allowForce", allowForce),
+                ("wheelTorque", wheelTorque),
+                ("perWheelForce", perWheelForce),
+                ("gearEngaged", gearEngaged),
+                ("throttle", throttle),
+                ("actualRPM", actualEngineRPM),
+                ("gearRatio", gearRatio),
+                ("maxSpeedForGear", maxSpeedForGear),
+                ("speed", speed),
+                ("runId", "pre-fix"),
+                ("location", "DriveSystem.CalculateAndApplyForce"));
+            // #endregion
+
+            float mu = wheelSpec.friction;
+            float crr = wheelSpec.rollingResistance;
+            Vector3 forceDir = Mathf.Sign(gearRatio) > 0 ? ctx.Forward : -ctx.Forward;
+
+            foreach (int idx in driven)
+            {
+                var w = state.wheels[idx];
+                if (!w.isGrounded)
+                    continue;
+
+                float normal = Mathf.Max(0f, w.normalForce);
+                float tractionLimit = mu * normal;
+                float rollingForce = crr * normal;
+                float usable = Mathf.Max(0f, tractionLimit - rollingForce);
+                float applied = Mathf.Min(perWheelForce, usable);
+                if (applied <= 0f)
+                    continue;
+
+                Vector3 force = forceDir * applied;
+                ctx.rb.AddForceAtPosition(force, w.contactPoint, ForceMode.Force);
+
+                // #region agent log
+                AppendLog("Drive:wheelForce", "H5",
+                    ("wheel", idx),
+                    ("applied", applied),
+                    ("tractionLimit", tractionLimit),
+                    ("rollingForce", rollingForce),
+                    ("normal", w.normalForce),
+                    ("gearRatio", gearRatio),
+                    ("speed", speed),
+                    ("perWheelForce", perWheelForce),
+                    ("driveType", driveType.ToString()),
+                    ("runId", "pre-fix"),
+                    ("location", "DriveSystem.CalculateAndApplyForce"));
+                // #endregion
+            }
+        }
+
+        // Minimal NDJSON logger
+        private void AppendLog(string message, string hypothesisId, params (string key, object value)[] fields)
+        {
+            try
+            {
+                const string LogPath = "/Users/ivanhromau/Personal/RaceWars/.cursor/debug.log";
+                var dir = Path.GetDirectoryName(LogPath);
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+                var sb = new StringBuilder(256);
+                sb.Append('{');
+                sb.Append("\"timestamp\":").Append(System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).Append(',');
+                sb.Append("\"sessionId\":\"debug-session\",");
+                sb.Append("\"runId\":\"pre-fix\",");
+                sb.Append("\"hypothesisId\":\"").Append(hypothesisId).Append("\",");
+                sb.Append("\"message\":\"").Append(message).Append("\",");
+                sb.Append("\"data\":{");
+                for (int i = 0; i < fields.Length; i++)
+                {
+                    var (key, val) = fields[i];
+                    sb.Append('\"').Append(key).Append("\":");
+                    switch (val)
+                    {
+                        case bool b:
+                            sb.Append(b ? "true" : "false");
+                            break;
+                        case int iv:
+                            sb.Append(iv);
+                            break;
+                        case float fv:
+                            sb.Append(fv.ToString(CultureInfo.InvariantCulture));
+                            break;
+                        case double dv:
+                            sb.Append(dv.ToString(CultureInfo.InvariantCulture));
+                            break;
+                        case string sv:
+                            sb.Append('\"').Append(sv).Append('\"');
+                            break;
+                        default:
+                            sb.Append('\"').Append(val?.ToString() ?? "null").Append('\"');
+                            break;
+                    }
+                    if (i < fields.Length - 1) sb.Append(',');
+                }
+                sb.Append("}}");
+                File.AppendAllText(LogPath, sb.ToString() + "\n");
+            }
+            catch (System.Exception ex)
+            {
+                UnityEngine.Debug.LogWarning($"[DriveSystem] log failed: {ex.Message}");
             }
         }
 
@@ -334,7 +496,7 @@ namespace Vehicle.Systems
         /// </summary>
         private void ApplyDrive(in VehicleInput input, ref VehicleState state, in VehicleContext ctx)
         {
-            if (!ValidateAndInitialize(ctx, state, out EngineSpec engineSpec, out GearboxSpec gearboxSpec, out float wheelRadius))
+            if (!ValidateAndInitialize(ctx, state, out EngineSpec engineSpec, out GearboxSpec gearboxSpec, out WheelSpec wheelSpec, out float wheelRadius))
             {
                 return;
             }
@@ -349,6 +511,17 @@ namespace Vehicle.Systems
             float gearRatio = _gearboxSystem.GetCurrentGearRatio();
             bool gearEngaged = !_gearboxSystem.IsShifting && Mathf.Abs(gearRatio) > MinGearRatioThreshold;
 
+            // #region agent log
+            AppendLog("Drive:inputs", "H1",
+                ("throttle", throttle),
+                ("brake", input.brake),
+                ("forwardSpeed", forwardSpeed),
+                ("gearRatioPre", gearRatio),
+                ("currentGear", _gearboxSystem.CurrentGear),
+                ("runId", "pre-fix"),
+                ("location", "DriveSystem.ApplyDrive"));
+            // #endregion
+
             UpdateClutchState();
 
             CalculateAndUpdateRPM(speed, wheelRadius, gearRatio, gearboxSpec.finalDriveRatio, 
@@ -362,8 +535,18 @@ namespace Vehicle.Systems
             CalculateAndUpdateRPM(speed, wheelRadius, gearRatio, gearboxSpec.finalDriveRatio, 
                 throttle, engineSpec, gearEngaged, ctx.dt);
 
-            CalculateAndApplyForce(speed, wheelRadius, gearRatio, gearboxSpec.finalDriveRatio,
-                throttle, engineSpec, gearboxSpec, gearEngaged, ctx);
+            CalculateAndApplyForce(
+                speed,
+                wheelRadius,
+                gearRatio,
+                gearboxSpec.finalDriveRatio,
+                throttle,
+                engineSpec,
+                gearboxSpec,
+                wheelSpec,
+                gearEngaged,
+                ctx,
+                ref state);
 
             UpdateVehicleState(ref state, gearRatio, gearboxSpec.finalDriveRatio, engineSpec, ctx.dt);
         }

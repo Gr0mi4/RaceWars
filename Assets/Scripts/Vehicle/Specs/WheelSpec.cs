@@ -18,6 +18,20 @@ namespace Vehicle.Specs
         [Tooltip("Wheel radius in meters. Typical: 0.3-0.4m for cars")]
         public float wheelRadius = 0.3f;
 
+        /// <summary>
+        /// Wheel mount points relative to the vehicle origin (local space).
+        /// Order: 0 = Front-Left, 1 = Front-Right, 2 = Rear-Left, 3 = Rear-Right.
+        /// These are physics points, not tied to mesh vertices.
+        /// </summary>
+        [Tooltip("Wheel mount points (local). Order: FL, FR, RL, RR.")]
+        public Vector3[] wheelOffsets = new Vector3[4]
+        {
+            new Vector3(-0.77f, -0.20f,  1.29f), // FL
+            new Vector3( 0.77f, -0.20f,  1.29f), // FR
+            new Vector3(-0.76f, -0.20f, -1.29f), // RL
+            new Vector3( 0.76f, -0.20f, -1.29f)  // RR
+        };
+
         [Header("Tire Properties")]
         /// <summary>
         /// Tire friction coefficient on dry surface (μ).
@@ -34,6 +48,22 @@ namespace Vehicle.Specs
         [Range(0.1f, 1.5f)]
         [Tooltip("Tire friction coefficient on wet surface (μ). Typically 60-80% of dry friction")]
         public float wetFrictionCoefficient = 0.5f;
+
+        /// <summary>
+        /// Base friction coefficient used across systems (single source of truth for μ).
+        /// Defaults to dry tire friction.
+        /// </summary>
+        [Range(0.1f, 2.0f)]
+        [Tooltip("Base friction coefficient μ (used by steering/drive).")]
+        public float friction = 0.9f;
+
+        /// <summary>
+        /// Rolling resistance coefficient Crr. Typical asphalt: 0.01-0.02.
+        /// Used to apply a small resisting torque/force at each wheel.
+        /// </summary>
+        [Range(0.001f, 0.05f)]
+        [Tooltip("Rolling resistance coefficient Crr. Typical asphalt: 0.01-0.02.")]
+        public float rollingResistance = 0.015f;
 
         /// <summary>
         /// Tire sidewall stiffness. Affects lateral grip and response.

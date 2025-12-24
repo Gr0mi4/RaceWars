@@ -62,6 +62,28 @@ namespace Vehicle.Specs
         [Tooltip("Moment of inertia around Z axis (pitch)")]
         public float inertiaZ = 500f;
 
+        [Header("Dimensions")]
+        /// <summary>
+        /// Overall chassis length (m). Used for sanity checks against wheel offsets.
+        /// </summary>
+        [Min(0.1f)]
+        [Tooltip("Chassis length in meters.")]
+        public float length = 4.21f; // Golf V approx
+
+        /// <summary>
+        /// Overall chassis width (m).
+        /// </summary>
+        [Min(0.1f)]
+        [Tooltip("Chassis width in meters.")]
+        public float width = 1.78f; // Golf V approx
+
+        /// <summary>
+        /// Overall chassis height (m).
+        /// </summary>
+        [Min(0.1f)]
+        [Tooltip("Chassis height in meters.")]
+        public float height = 1.48f; // Golf V approx
+
         [Header("Aerodynamics")]
         /// <summary>
         /// Frontal area of the vehicle in square meters. Used for aerodynamic drag calculations.

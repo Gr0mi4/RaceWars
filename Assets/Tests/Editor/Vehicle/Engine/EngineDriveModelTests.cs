@@ -224,7 +224,7 @@ namespace Vehicle.Tests.Engine
                 speed = 0f,
                 wheelRadius = 0.3f
             };
-            var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f, null, _gearboxSpec, _wheelSpec, null, null);
+            var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f, null, _gearboxSpec, _wheelSpec, null, null, null, null);
 
             Vector3 initialVelocity = _rigidbody.linearVelocity;
 
@@ -247,7 +247,7 @@ namespace Vehicle.Tests.Engine
                 speed = 0f,
                 wheelRadius = 0.3f
             };
-            var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f, _engineSpec, null, _wheelSpec, null, null);
+            var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f, _engineSpec, null, _wheelSpec, null, null, null, null);
 
             Vector3 initialVelocity = _rigidbody.linearVelocity;
 
@@ -298,7 +298,7 @@ namespace Vehicle.Tests.Engine
             var carSpecNoEngine = ScriptableObject.CreateInstance<CarSpec>();
             carSpecNoEngine.engineSpec = null;
             carSpecNoEngine.gearboxSpec = null;
-            var ctx = new VehicleContext(_rigidbody, _transform, carSpecNoEngine, 0.02f, null, null, _wheelSpec, null, null);
+            var ctx = new VehicleContext(_rigidbody, _transform, carSpecNoEngine, 0.02f, null, null, _wheelSpec, null, null, null, null);
 
             Vector3 initialVelocity = _rigidbody.linearVelocity;
 
@@ -327,7 +327,7 @@ namespace Vehicle.Tests.Engine
             var carSpecNoGearbox = ScriptableObject.CreateInstance<CarSpec>();
             carSpecNoGearbox.engineSpec = null;
             carSpecNoGearbox.gearboxSpec = null;
-            var ctx = new VehicleContext(_rigidbody, _transform, carSpecNoGearbox, 0.02f, null, null, _wheelSpec, null, null);
+            var ctx = new VehicleContext(_rigidbody, _transform, carSpecNoGearbox, 0.02f, null, null, _wheelSpec, null, null, null, null);
 
             Vector3 initialVelocity = _rigidbody.linearVelocity;
 

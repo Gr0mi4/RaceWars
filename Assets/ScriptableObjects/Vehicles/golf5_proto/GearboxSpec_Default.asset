@@ -13,12 +13,12 @@ MonoBehaviour:
   m_Name: GearboxSpec_Default
   m_EditorClassIdentifier: Assembly-CSharp::Vehicle.Specs.GearboxSpec
   gearRatios:
-  - 3.778
+  - 3.78
   - 1.944
   - 1.308
   - 0.898
   - 0.708
-  finalDriveRatio: 3.88
+  finalDriveRatio: 4.9
   reverseGearRatio: 3.53
   transmissionType: 1
   shiftTime: 0.2

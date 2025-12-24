@@ -22,6 +22,7 @@ namespace Vehicle.UI
         [SerializeField] private bool showTransmissionModule = true;
         [SerializeField] private bool showForcesModule = true;
         [SerializeField] private bool showWheelsModule = false;
+        [SerializeField] private bool showSuspensionModule = false;
         
         [Header("Settings")]
         [SerializeField] private float updateInterval = 0.1f;
@@ -43,6 +44,7 @@ namespace Vehicle.UI
         private TransmissionTelemetryModule _transmissionModule;
         private ForcesTelemetryModule _forcesModule;
         private WheelsTelemetryModule _wheelsModule;
+        private SuspensionTelemetryModule _suspensionModule;
         
         // UI elements
         private GameObject _container;
@@ -81,6 +83,7 @@ namespace Vehicle.UI
             _transmissionModule = new TransmissionTelemetryModule(showTransmissionModule);
             _forcesModule = new ForcesTelemetryModule(showForcesModule);
             _wheelsModule = new WheelsTelemetryModule(showWheelsModule);
+            _suspensionModule = new SuspensionTelemetryModule(showSuspensionModule);
         }
 
         private void Update()
@@ -119,6 +122,7 @@ namespace Vehicle.UI
             _transmissionModule.SetEnabled(showTransmissionModule);
             _forcesModule.SetEnabled(showForcesModule);
             _wheelsModule.SetEnabled(showWheelsModule);
+            _suspensionModule.SetEnabled(showSuspensionModule);
             
             // Build display text from all enabled modules
             string displayText = string.Empty;
@@ -151,6 +155,11 @@ namespace Vehicle.UI
             if (_forcesModule.IsEnabled)
             {
                 displayText += _forcesModule.GetDisplayText(input, state, ctx) + "\n";
+            }
+
+            if (_suspensionModule.IsEnabled)
+            {
+                displayText += _suspensionModule.GetDisplayText(input, state, ctx) + "\n";
             }
             
             _mainText.text = displayText;
@@ -221,7 +230,9 @@ namespace Vehicle.UI
                 _cachedCarSpec.gearboxSpec,
                 _cachedCarSpec.wheelSpec,
                 _cachedCarSpec.chassisSpec,
-                _cachedCarSpec.steeringSpec
+                _cachedCarSpec.steeringSpec,
+                _cachedCarSpec.suspensionSpec,
+                _cachedCarSpec.drivetrainSpec
             );
         }
 

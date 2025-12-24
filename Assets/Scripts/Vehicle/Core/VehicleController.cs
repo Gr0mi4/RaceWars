@@ -68,7 +68,8 @@ namespace Vehicle.Core
                 engineRPM = 0f,
                 wheelAngularVelocity = 0f,
                 currentGear = 1, // Start in 1st gear (matches GearboxSystem default)
-                wheelRadius = 0f // Will be set by WheelSystem or use default from WheelSpec
+                wheelRadius = 0f, // Will be set by WheelSystem or use default from WheelSpec
+                wheels = System.Array.Empty<WheelRuntime>()
             };
             
             // Use serialized field if assigned, otherwise try to get component
@@ -80,8 +81,19 @@ namespace Vehicle.Core
             if (carSpec != null)
             {
                 ApplyRigidbodyDefaults();
+                InitializeWheelState();
                 _pipeline = CreatePipeline();
             }
+        }
+
+        /// <summary>
+        /// Initializes per-wheel runtime state array based on WheelSpec offsets.
+        /// </summary>
+        private void InitializeWheelState()
+        {
+            var offsets = carSpec?.wheelSpec?.wheelOffsets;
+            int count = (offsets != null && offsets.Length > 0) ? offsets.Length : 0;
+            _state.wheels = count > 0 ? new WheelRuntime[count] : System.Array.Empty<WheelRuntime>();
         }
 
         /// <summary>
@@ -121,7 +133,9 @@ namespace Vehicle.Core
                 carSpec?.gearboxSpec,
                 carSpec?.wheelSpec,
                 carSpec?.chassisSpec,
-                carSpec?.steeringSpec
+                carSpec?.steeringSpec,
+                carSpec?.suspensionSpec,
+                carSpec?.drivetrainSpec
             );
             var input = inputProvider.CurrentInput;
 
@@ -175,13 +189,19 @@ namespace Vehicle.Core
                 modules.Add(new SuspensionSystem());
             }
 
-            // 6. Drivetrain System - placeholder for future implementation
+            // 6. Rolling Resistance System - apply per-wheel rolling drag
+            if (carSpec?.wheelSpec != null)
+            {
+                modules.Add(new RollingResistanceSystem());
+            }
+
+            // 7. Drivetrain System - placeholder for future implementation
             if (carSpec?.drivetrainSpec != null)
             {
                 modules.Add(new DrivetrainSystem());
             }
 
-            // 7. Telemetry System - debug/utility (optional)
+            // 8. Telemetry System - debug/utility (optional)
             if (enableTelemetry)
             {
                 modules.Add(new TelemetrySystem(enableTelemetry, telemetryInterval, logCollisions));
@@ -221,7 +241,9 @@ namespace Vehicle.Core
                 carSpec?.gearboxSpec,
                 carSpec?.wheelSpec,
                 carSpec?.chassisSpec,
-                carSpec?.steeringSpec
+                carSpec?.steeringSpec,
+                carSpec?.suspensionSpec,
+                carSpec?.drivetrainSpec
             );
             _pipeline.NotifyCollision(collision, ctx, ref _state);
         }

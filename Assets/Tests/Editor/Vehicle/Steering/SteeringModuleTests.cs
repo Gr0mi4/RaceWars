@@ -17,6 +17,7 @@ namespace Vehicle.Tests.Steering
         private Rigidbody _rigidbody;
         private Transform _transform;
         private CarSpec _carSpec;
+        private WheelSpec _wheelSpec;
 
         [SetUp]
         public void SetUp()
@@ -27,6 +28,8 @@ namespace Vehicle.Tests.Steering
             _transform = _gameObject.transform;
 
             _carSpec = ScriptableObject.CreateInstance<CarSpec>();
+            _wheelSpec = ScriptableObject.CreateInstance<WheelSpec>();
+            _wheelSpec.friction = 0.9f;
         }
 
         [TearDown]
@@ -40,6 +43,10 @@ namespace Vehicle.Tests.Steering
             {
                 Object.DestroyImmediate(_carSpec);
             }
+            if (_wheelSpec != null)
+            {
+                Object.DestroyImmediate(_wheelSpec);
+            }
         }
 
         [Test]
@@ -49,7 +56,6 @@ namespace Vehicle.Tests.Steering
             var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.wheelbase = 2.8f;
             spec.maxSteerAngle = 32f;
-            spec.baseMu = 0.75f;
             spec.yawResponseTime = 0.11f;
             spec.maxYawAccel = 11f;
             spec.minForwardSpeed = 0.2f;
@@ -62,7 +68,7 @@ namespace Vehicle.Tests.Steering
                 yawRate = 0f,
                 speed = 10f
             };
-            var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f);
+            var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f, null, null, _wheelSpec, null, spec, null, null);
 
             Vector3 initialAngularVelocity = _rigidbody.angularVelocity;
 
@@ -84,7 +90,6 @@ namespace Vehicle.Tests.Steering
             var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.wheelbase = 2.8f;
             spec.maxSteerAngle = 32f;
-            spec.baseMu = 0.75f;
             spec.yawResponseTime = 0.11f;
             spec.maxYawAccel = 11f;
             spec.minForwardSpeed = 0.2f;
@@ -97,7 +102,7 @@ namespace Vehicle.Tests.Steering
                 yawRate = 0f,
                 speed = 10f
             };
-            var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f);
+            var ctx = new VehicleContext(_rigidbody, _transform, _carSpec, 0.02f, null, null, _wheelSpec, null, spec, null, null);
 
             Vector3 initialAngularVelocity = _rigidbody.angularVelocity;
 
@@ -140,7 +145,6 @@ namespace Vehicle.Tests.Steering
             var spec = ScriptableObject.CreateInstance<SteeringSpec>();
             spec.wheelbase = 2.8f;
             spec.maxSteerAngle = 32f;
-            spec.baseMu = 0.75f;
             spec.yawResponseTime = 0.11f;
             spec.maxYawAccel = 11f;
             spec.minForwardSpeed = 0.2f;
@@ -155,7 +159,7 @@ namespace Vehicle.Tests.Steering
             };
 
             // Create context with null rigidbody
-            var ctx = new VehicleContext(null, _transform, _carSpec, 0.02f);
+            var ctx = new VehicleContext(null, _transform, _carSpec, 0.02f, null, null, _wheelSpec, null, spec, null, null);
 
             // Act & Assert - should not throw (system should check for null)
             Assert.DoesNotThrow(() =>
