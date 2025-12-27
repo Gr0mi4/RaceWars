@@ -21,7 +21,10 @@ namespace Vehicle.Input
         /// <summary>
         /// Gets the current vehicle input. Updated every frame in Update().
         /// </summary>
-        public VehicleInput CurrentInput { get; private set; }
+        public VehicleInput CurrentInput
+        {
+            get; private set;
+        }
 
         private IInputSource _source;
 

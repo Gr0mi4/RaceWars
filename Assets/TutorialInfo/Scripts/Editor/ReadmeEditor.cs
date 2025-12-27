@@ -1,17 +1,17 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEditor;
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using UnityEditor;
+using UnityEngine;
 
 [CustomEditor(typeof(Readme))]
 [InitializeOnLoad]
 public class ReadmeEditor : Editor
 {
     static string s_ShowedReadmeSessionStateName = "ReadmeEditor.showedReadme";
-    
+
     static string s_ReadmeSourceDirectory = "Assets/TutorialInfo";
 
     const float k_Space = 16f;
@@ -24,7 +24,7 @@ public class ReadmeEditor : Editor
     static void RemoveTutorial()
     {
         if (EditorUtility.DisplayDialog("Remove Readme Assets",
-            
+
             $"All contents under {s_ReadmeSourceDirectory} will be removed, are you sure you want to proceed?",
             "Proceed",
             "Cancel"))
@@ -158,7 +158,10 @@ public class ReadmeEditor : Editor
 
     GUIStyle LinkStyle
     {
-        get { return m_LinkStyle; }
+        get
+        {
+            return m_LinkStyle;
+        }
     }
 
     [SerializeField]
@@ -166,7 +169,10 @@ public class ReadmeEditor : Editor
 
     GUIStyle TitleStyle
     {
-        get { return m_TitleStyle; }
+        get
+        {
+            return m_TitleStyle;
+        }
     }
 
     [SerializeField]
@@ -174,7 +180,10 @@ public class ReadmeEditor : Editor
 
     GUIStyle HeadingStyle
     {
-        get { return m_HeadingStyle; }
+        get
+        {
+            return m_HeadingStyle;
+        }
     }
 
     [SerializeField]
@@ -182,7 +191,10 @@ public class ReadmeEditor : Editor
 
     GUIStyle BodyStyle
     {
-        get { return m_BodyStyle; }
+        get
+        {
+            return m_BodyStyle;
+        }
     }
 
     [SerializeField]
@@ -190,7 +202,10 @@ public class ReadmeEditor : Editor
 
     GUIStyle ButtonStyle
     {
-        get { return m_ButtonStyle; }
+        get
+        {
+            return m_ButtonStyle;
+        }
     }
 
     [SerializeField]

@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Vehicle.Debug;
 using Vehicle.Input;
 using Vehicle.Specs;
 using Vehicle.Systems;
-using Vehicle.Debug;
 
 namespace Vehicle.Core
 {
@@ -19,7 +19,7 @@ namespace Vehicle.Core
         /// Car specification containing vehicle parameters (mass, forces, aerodynamics, etc.).
         /// </summary>
         [SerializeField] private CarSpec carSpec;
-        
+
         /// <summary>
         /// Input provider that supplies vehicle input from various sources (keyboard, gamepad, AI, etc.).
         /// </summary>
@@ -59,7 +59,7 @@ namespace Vehicle.Core
         private void Awake()
         {
             _rb = GetComponent<Rigidbody>();
-            
+
             // Initialize vehicle state with default values
             _state = new VehicleState
             {
@@ -73,7 +73,7 @@ namespace Vehicle.Core
                 wheelRadius = 0f, // Will be set by WheelSystem or use default from WheelSpec
                 wheels = System.Array.Empty<WheelRuntime>()
             };
-            
+
             // Use serialized field if assigned, otherwise try to get component
             if (inputProvider == null)
             {
@@ -109,7 +109,7 @@ namespace Vehicle.Core
                 _rb.mass = Mathf.Max(_rb.mass, carSpec.chassisSpec.mass);
                 _rb.centerOfMass = carSpec.chassisSpec.centerOfMass;
             }
-            
+
             // Damping from CarSpec
             RigidbodyCompat.SetLinearDamping(_rb, carSpec.linearDamping);
             RigidbodyCompat.SetAngularDamping(_rb, carSpec.angularDamping);
@@ -127,9 +127,9 @@ namespace Vehicle.Core
             UpdateState();
             // Create context with all specs from CarSpec
             var ctx = new VehicleContext(
-                _rb, 
-                transform, 
-                carSpec, 
+                _rb,
+                transform,
+                carSpec,
                 Time.fixedDeltaTime,
                 carSpec?.engineSpec,
                 carSpec?.gearboxSpec,
@@ -190,7 +190,7 @@ namespace Vehicle.Core
             {
                 modules.Add(new AerodragSystem(airDensity, minSpeedForDrag));
             }
-            
+
 
             if (enableTelemetry)
             {
@@ -223,9 +223,9 @@ namespace Vehicle.Core
                 return;
 
             var ctx = new VehicleContext(
-                _rb, 
-                transform, 
-                carSpec, 
+                _rb,
+                transform,
+                carSpec,
                 Time.fixedDeltaTime,
                 carSpec?.engineSpec,
                 carSpec?.gearboxSpec,

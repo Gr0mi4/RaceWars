@@ -98,8 +98,8 @@ namespace Vehicle.Debug
                     currentGearRatio = ctx.gearboxSpec.gearRatios[arrayIndex] * ctx.gearboxSpec.finalDriveRatio;
                 }
 
-                float wheelRadius = state.wheelRadius > 0.01f 
-                    ? state.wheelRadius 
+                float wheelRadius = state.wheelRadius > 0.01f
+                    ? state.wheelRadius
                     : (ctx.wheelSpec != null ? ctx.wheelSpec.wheelRadius : 0.3f);
 
                 // Calculate wheel force using EngineSystem
@@ -139,13 +139,13 @@ namespace Vehicle.Debug
                 if (rpm > 0f && input.throttle > 0f)
                 {
                     // Normalize RPM
-                    float normalizedRPM = Mathf.Clamp01((rpm - ctx.engineSpec.idleRPM) / 
+                    float normalizedRPM = Mathf.Clamp01((rpm - ctx.engineSpec.idleRPM) /
                         (ctx.engineSpec.maxRPM - ctx.engineSpec.idleRPM));
-                    
+
                     // Get from curves
                     float powerMultiplier = ctx.engineSpec.powerCurve.Evaluate(normalizedRPM);
                     float torqueMultiplier = ctx.engineSpec.torqueCurve.Evaluate(normalizedRPM);
-                    
+
                     powerHP = ctx.engineSpec.maxPower * powerMultiplier * input.throttle;
                     torqueNm = ctx.engineSpec.maxTorque * torqueMultiplier * input.throttle;
                 }

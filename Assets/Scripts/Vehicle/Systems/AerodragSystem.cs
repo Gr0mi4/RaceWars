@@ -56,7 +56,7 @@ namespace Vehicle.Systems
             // Calculate aerodynamic drag force: F = -0.5 * ρ * Cd * A * v² * direction
             // This is the standard drag equation for fluid dynamics
             float dragForceMagnitude = 0.5f * _airDensity * dragCoefficient * frontArea * speed * speed;
-            
+
             // Direction is opposite to velocity (drag opposes motion)
             Vector3 dragDirection = -velocity.normalized;
             Vector3 dragForce = dragDirection * dragForceMagnitude;

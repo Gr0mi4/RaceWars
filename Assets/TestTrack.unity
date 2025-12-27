@@ -520,16 +520,13 @@ MonoBehaviour:
   vehicleController: {fileID: 1404744451}
   showInputModule: 0
   showMotionModule: 1
-  showEngineModule: 0
-  showTransmissionModule: 0
+  showEngineModule: 1
+  showTransmissionModule: 1
   showForcesModule: 0
-  showWheelsModule: 1
-  showSuspensionModule: 1
+  showWheelsModule: 0
+  showSuspensionModule: 0
   updateInterval: 0.1
-  minScaleFactor: 1.5
-  lineHeight: 20
-  categorySpacing: 10
-  categoryFontSize: 18
+  minScaleFactor: 1.2
   dataFontSize: 14
   categoryColor: {r: 1, g: 1, b: 1, a: 1}
   dataColor: {r: 0, g: 0, b: 0, a: 1}
@@ -1345,6 +1342,10 @@ PrefabInstance:
       propertyPath: m_LocalPosition.y
       value: 0.89
       objectReference: {fileID: 0}
+    - target: {fileID: 7351102662921108210, guid: 5b848fddf846f4545a0da5768f59b18f, type: 3}
+      propertyPath: inputMapping
+      value: 
+      objectReference: {fileID: 11400000, guid: 35ed3399262ac6f42b224d8e623ffc56, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -2037,7 +2038,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 100, y: 1, z: 100}
+  m_LocalScale: {x: 1000, y: 1, z: 1000}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -2151,7 +2152,7 @@ Camera:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1973077268}
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 2
   m_ClearFlags: 1
   m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
@@ -2343,11 +2344,6 @@ MonoBehaviour:
   wheelSpec: {fileID: 11400000, guid: c071f3c5c29dd4236bf1ee9ffe7fdd58, type: 2}
   suspensionSpec: {fileID: 11400000, guid: 1d4173f92f70f4ad09d4fea1572f0850, type: 2}
   controller: {fileID: 1404744451}
-  steerPivots:
-  - {fileID: 15818418}
-  - {fileID: 604852484}
-  - {fileID: 324109957}
-  - {fileID: 1005209770}
   wheelVisuals:
   - {fileID: 15818418}
   - {fileID: 604852484}

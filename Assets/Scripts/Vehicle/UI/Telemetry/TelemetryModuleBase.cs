@@ -14,7 +14,10 @@ namespace Vehicle.UI.Telemetry
         /// <summary>
         /// Gets the display name of the module.
         /// </summary>
-        public abstract string ModuleName { get; }
+        public abstract string ModuleName
+        {
+            get;
+        }
 
         /// <summary>
         /// Gets whether this module is currently enabled.

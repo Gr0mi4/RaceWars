@@ -20,7 +20,7 @@ namespace Vehicle.Systems
                 return;
 
             var wheelSpec = ctx.wheelSpec;
-            var suspSpec  = ctx.suspensionSpec;
+            var suspSpec = ctx.suspensionSpec;
 
             int wheelCount = wheelSpec.wheelOffsets.Length;
             if (wheelCount == 0)

@@ -61,26 +61,8 @@ namespace Vehicle.UI.Telemetry
                 // For now, we'll calculate what we can
             }
 
-            // Calculate max speed for current gear
-            float maxSpeedForGear = 0f;
-            if (ctx.engineSpec != null && state.wheelRadius > 0.01f && gearEngaged)
-            {
-                float baseRatio = Mathf.Abs(baseGearRatio);
-                if (baseRatio > 0.01f && finalDriveRatio > 0.01f)
-                {
-                    float maxWheelAngularVelocity = _engineSystem.CalculateWheelAngularVelocityFromEngine(
-                        ctx.engineSpec.maxRPM,
-                        baseRatio,
-                        finalDriveRatio
-                    );
-                    maxSpeedForGear = _engineSystem.CalculateSpeedFromWheel(maxWheelAngularVelocity, state.wheelRadius);
-                }
-            }
-
             // Current speed
             float currentSpeed = Mathf.Abs(Vector3.Dot(RigidbodyCompat.GetVelocity(ctx.rb), ctx.tr.forward));
-            float speedPercentage = maxSpeedForGear > 0.01f ? (currentSpeed / maxSpeedForGear) * 100f : 0f;
-
             // Angular velocities
             float wheelAngularVelocity = state.wheelAngularVelocity;
             float engineAngularVelocity = 0f;
@@ -99,7 +81,7 @@ namespace Vehicle.UI.Telemetry
             string transmissionType = ctx.gearboxSpec.transmissionType.ToString();
 
             string text = ModuleName + "\n";
-            
+
             // Current state
             text += FormatString("Gear", gearName);
             text += FormatValue("Base Gear Ratio", baseGearRatio, "", 3);
@@ -117,11 +99,8 @@ namespace Vehicle.UI.Telemetry
             text += FormatBool("Gear Engaged", gearEngaged) + "\n";
 
             // Speed characteristics
-            text += FormatValue("Max Speed for Gear", maxSpeedForGear, "m/s", 2) + 
-                    $" ({maxSpeedForGear * 3.6f:F1} km/h)\n";
-            text += FormatValue("Current Speed", currentSpeed, "m/s", 2) + 
+            text += FormatValue("Current Speed", currentSpeed, "m/s", 2) +
                     $" ({currentSpeed * 3.6f:F1} km/h)\n";
-            text += FormatValue("Speed % of Max", speedPercentage, "%", 1) + "\n";
             text += FormatValue("Upshift RPM", ctx.gearboxSpec.autoShiftUpRPM, "", 0);
             text += FormatValue("Downshift RPM", ctx.gearboxSpec.autoShiftDownRPM, "", 0);
             text += FormatValue("Min Speed for Upshift", ctx.gearboxSpec.minSpeedForUpshift, "m/s", 2) + "\n";
@@ -129,7 +108,7 @@ namespace Vehicle.UI.Telemetry
             // Angular velocities
             text += FormatValue("Wheel Angular Velocity", wheelAngularVelocity, "rad/s", 2);
             text += FormatValue("Engine Angular Velocity", engineAngularVelocity, "rad/s", 2);
-            text += FormatValue("Speed from Wheel", calculatedSpeed, "m/s", 2) + 
+            text += FormatValue("Speed from Wheel", calculatedSpeed, "m/s", 2) +
                     $" ({calculatedSpeed * 3.6f:F1} km/h)\n";
 
             // Static parameters (optional, can be shown if needed)

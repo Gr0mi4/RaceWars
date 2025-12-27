@@ -16,7 +16,7 @@ namespace Vehicle.Specs
         [Min(1f)]
         [Tooltip("Vehicle mass in kilograms")]
         public float mass = 800f;
-        
+
         /// <summary>
         /// Center of mass offset from the transform origin. Lower Y values make the vehicle more stable.
         /// </summary>
@@ -91,7 +91,7 @@ namespace Vehicle.Specs
         [Range(0.1f, 10f)]
         [Tooltip("Frontal area in square meters. Used for drag calculations")]
         public float frontArea = 2.0f;
-        
+
         /// <summary>
         /// Drag coefficient (Cd). Lower values mean less aerodynamic drag. Typical range: 0.2-0.5 for cars.
         /// </summary>

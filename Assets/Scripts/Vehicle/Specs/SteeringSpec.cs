@@ -17,7 +17,7 @@ namespace Vehicle.Specs
         [Range(2.0f, 5.0f)]
         [Tooltip("Distance between front and rear axles (wheelbase) in meters. Typical sedan: 2.7-3.0m")]
         public float wheelbase = 2.8f;
-        
+
         /// <summary>
         /// Maximum steering angle in degrees.
         /// Typical: 30-35° for realistic feel
@@ -78,7 +78,7 @@ namespace Vehicle.Specs
         [Range(0.5f, 1.0f)]
         [Tooltip("How strongly brake/throttle reduces lateral grip. Driver-style: ~0.9-1.0 for strong coupling")]
         public float frictionCircleStrength = 0.95f;
-        
+
         /// <summary>
         /// How much throttle affects friction circle (0.0-1.0).
         /// Lower = throttle affects lateral grip less.
@@ -87,7 +87,7 @@ namespace Vehicle.Specs
         [Range(0.01f, 0.3f)]
         [Tooltip("How much throttle affects friction circle. Lower = throttle affects lateral grip less")]
         public float throttleFrictionEffect = 0.1f;
-        
+
         /// <summary>
         /// Grip reduction multiplier when handbrake is active.
         /// Driver-style: ~0.2 for controlled slides
@@ -104,7 +104,7 @@ namespace Vehicle.Specs
         [Range(0.05f, 0.3f)]
         [Tooltip("How quickly yaw rate responds to steering input (response time in seconds). Driver-style: ~0.1-0.12s")]
         public float yawResponseTime = 0.11f;
-        
+
         /// <summary>
         /// Maximum yaw acceleration in rad/s².
         /// Driver-style: ~10-12 for realistic limits

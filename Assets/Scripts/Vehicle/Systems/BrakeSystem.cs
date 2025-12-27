@@ -24,7 +24,7 @@ namespace Vehicle.Systems
             float mass = Mathf.Max(1f, ctx.rb.mass);
 
             float brake01 = Mathf.Clamp01(Mathf.Abs(input.brake));
-            float hand01  = Mathf.Clamp01(Mathf.Abs(input.handbrake));
+            float hand01 = Mathf.Clamp01(Mathf.Abs(input.handbrake));
 
             // Clear every tick
             for (int i = 0; i < state.wheels.Length; i++)
@@ -37,7 +37,7 @@ namespace Vehicle.Systems
                     state.wheels[i].brakeTorque += tq;
             }
 
-            // Handbrake: rear only (2,3)
+            // Handbrake: rear only (1,3)
             if (hand01 > Epsilon && state.wheels.Length >= 4)
             {
                 float tq = (HandbrakeTorquePerKg * mass) * hand01;

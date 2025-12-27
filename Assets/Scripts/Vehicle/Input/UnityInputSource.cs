@@ -78,7 +78,7 @@ namespace Vehicle.Input
 
             // Read button inputs
             float handbrake = UnityEngine.Input.GetKey(_mapping.handbrakeKey) ? 1f : 0f;
-            
+
             // Use tracked key state for shift buttons (more reliable than GetKeyDown)
             float shiftUp = _shiftUpPressed ? 1f : 0f;
             float shiftDown = _shiftDownPressed ? 1f : 0f;

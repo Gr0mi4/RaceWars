@@ -16,17 +16,17 @@ namespace Vehicle.Core
         /// Velocity of the vehicle in world space (m/s).
         /// </summary>
         public Vector3 worldVelocity;
-        
+
         /// <summary>
         /// Velocity of the vehicle in local space (m/s).
         /// </summary>
         public Vector3 localVelocity;
-        
+
         /// <summary>
         /// Current speed of the vehicle (m/s), calculated from local velocity magnitude.
         /// </summary>
         public float speed;
-        
+
         /// <summary>
         /// Current yaw rate (angular velocity around Y axis) in radians per second.
         /// </summary>
@@ -62,7 +62,9 @@ namespace Vehicle.Core
         /// /// <summary>
         /// Steering    
         /// </summary>
-        public float steerAngleDeg;        
+        public float steerAngleDeg;
+
+        public float clutchEngaged01; // 0..1        
     }
 
     /// <summary>
@@ -83,8 +85,17 @@ namespace Vehicle.Core
         public float wheelOmega;
         public float driveTorque;
         public float brakeTorque;
-        public Vector3 debugLongForce; 
+        public Vector3 debugLongForce;
         public Vector3 debugLatForce;
         public float debugUtil;
+        public float debugFxDesired;
+        public float debugFyDesired;
+        public float debugMuFz;
+        public float debugVLong;
+        public float debugShaftTorque;
+        public float debugOmegaTarget;
+        public float debugMechRPM;
+        public float debugLimiter;          // 0/1
+        public float debugEngineDragTorque; // signed at wheel
     }
 }

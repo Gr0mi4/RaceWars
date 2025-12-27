@@ -13,17 +13,17 @@ namespace Vehicle.Core
         /// The rigidbody component of the vehicle.
         /// </summary>
         public readonly Rigidbody rb;
-        
+
         /// <summary>
         /// The transform component of the vehicle.
         /// </summary>
         public readonly Transform tr;
-        
+
         /// <summary>
         /// The car specification containing vehicle parameters.
         /// </summary>
         public readonly CarSpec spec;
-        
+
         /// <summary>
         /// The fixed delta time for the current physics update.
         /// </summary>
@@ -75,12 +75,12 @@ namespace Vehicle.Core
         /// Forward direction of the vehicle in world space.
         /// </summary>
         public Vector3 Forward => tr.forward;
-        
+
         /// <summary>
         /// Right direction of the vehicle in world space.
         /// </summary>
         public Vector3 Right => tr.right;
-        
+
         /// <summary>
         /// Up direction of the vehicle in world space.
         /// </summary>
@@ -148,9 +148,9 @@ namespace Vehicle.Core
         /// <param name="steeringSpec">Steering specification (optional).</param>
         /// <param name="suspensionSpec">Suspension specification (optional).</param>
         public VehicleContext(
-            Rigidbody rb, 
-            Transform tr, 
-            CarSpec spec, 
+            Rigidbody rb,
+            Transform tr,
+            CarSpec spec,
             float dt,
             EngineSpec engineSpec,
             GearboxSpec gearboxSpec,

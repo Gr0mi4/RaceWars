@@ -14,7 +14,7 @@ namespace Vehicle.Core
         /// Gets the linear velocity of the rigidbody (Unity 6000.0+ API).
         /// </summary>
         public static Vector3 GetVelocity(Rigidbody rb) => rb.linearVelocity;
-        
+
         /// <summary>
         /// Sets the linear velocity of the rigidbody (Unity 6000.0+ API).
         /// </summary>
@@ -24,7 +24,7 @@ namespace Vehicle.Core
         /// Gets the linear damping of the rigidbody (Unity 6000.0+ API).
         /// </summary>
         public static float GetLinearDamping(Rigidbody rb) => rb.linearDamping;
-        
+
         /// <summary>
         /// Sets the linear damping of the rigidbody (Unity 6000.0+ API).
         /// </summary>
@@ -34,7 +34,7 @@ namespace Vehicle.Core
         /// Gets the angular damping of the rigidbody (Unity 6000.0+ API).
         /// </summary>
         public static float GetAngularDamping(Rigidbody rb) => rb.angularDamping;
-        
+
         /// <summary>
         /// Sets the angular damping of the rigidbody (Unity 6000.0+ API).
         /// </summary>

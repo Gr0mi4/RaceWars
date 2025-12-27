@@ -9,17 +9,17 @@ namespace Vehicle.Core
         /// Throttle input value. Range: 0 (no throttle) to 1 (full throttle).
         /// </summary>
         public float throttle;
-        
+
         /// <summary>
         /// Brake input value. Range: 0 (no brake) to 1 (full brake). Currently reserved for future use.
         /// </summary>
         public float brake;
-        
+
         /// <summary>
         /// Steering input value. Range: -1 (full left) to 1 (full right), 0 is straight.
         /// </summary>
         public float steer;
-        
+
         /// <summary>
         /// Handbrake input value. Range: 0 (no handbrake) to 1 (full handbrake). Currently reserved for future use.
         /// </summary>

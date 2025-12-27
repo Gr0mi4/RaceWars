@@ -13,12 +13,18 @@ namespace Vehicle.UI.Telemetry
         /// <summary>
         /// Gets the display name of the module (e.g., "[ENGINE]", "[GEARBOX]").
         /// </summary>
-        string ModuleName { get; }
+        string ModuleName
+        {
+            get;
+        }
 
         /// <summary>
         /// Gets whether this module is currently enabled.
         /// </summary>
-        bool IsEnabled { get; }
+        bool IsEnabled
+        {
+            get;
+        }
 
         /// <summary>
         /// Updates the module with current vehicle data and returns formatted text to display.

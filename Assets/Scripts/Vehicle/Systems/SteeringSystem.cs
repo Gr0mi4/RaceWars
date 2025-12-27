@@ -1,7 +1,7 @@
 using UnityEngine;
-using UDebug = UnityEngine.Debug;
 using Vehicle.Core;
 using Vehicle.Specs;
+using UDebug = UnityEngine.Debug;
 
 namespace Vehicle.Systems
 {
@@ -117,18 +117,17 @@ namespace Vehicle.Systems
             if (state.wheels == null || state.wheels.Length != count)
                 state.wheels = new WheelRuntime[count];
         }
+        private int[] _frontWheelIndices = new int[] { 0, 2 };
 
         private void WriteWheelForwardDirections(ref VehicleState state, in VehicleContext ctx, float steerAngleDeg)
         {
             if (state.wheels == null || state.wheels.Length == 0)
                 return;
 
-            // No WheelSpec? then all wheels follow body forward
             if (ctx.wheelSpec == null || ctx.wheelSpec.wheelOffsets == null || ctx.wheelSpec.wheelOffsets.Length != state.wheels.Length)
             {
                 for (int i = 0; i < state.wheels.Length; i++)
                     state.wheels[i].wheelForwardWorld = ctx.Forward;
-
                 return;
             }
 
@@ -136,8 +135,7 @@ namespace Vehicle.Systems
 
             for (int i = 0; i < state.wheels.Length; i++)
             {
-                // Front wheel detection by offset Z (same convention as in your other systems)
-                bool isFront = ctx.wheelSpec.wheelOffsets[i].z >= 0f;
+                bool isFront = System.Array.Exists(_frontWheelIndices, element => element == i);
 
                 Vector3 fwd = ctx.Forward;
                 if (isFront)

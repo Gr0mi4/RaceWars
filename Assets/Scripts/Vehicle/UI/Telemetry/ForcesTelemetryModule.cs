@@ -38,7 +38,7 @@ namespace Vehicle.UI.Telemetry
                 const float airDensity = 1.225f;
                 if (speed > 0.1f && ctx.chassisSpec.frontArea > 0f && ctx.chassisSpec.dragCoefficient > 0f)
                 {
-                    dragForce = 0.5f * airDensity * ctx.chassisSpec.dragCoefficient * 
+                    dragForce = 0.5f * airDensity * ctx.chassisSpec.dragCoefficient *
                                 ctx.chassisSpec.frontArea * speed * speed;
                 }
 
@@ -69,8 +69,8 @@ namespace Vehicle.UI.Telemetry
             if (ctx.engineSpec != null && ctx.gearboxSpec != null && state.engineRPM > 0f)
             {
                 float currentGearRatio = GetCurrentGearRatio(state.currentGear, ctx.gearboxSpec);
-                float wheelRadius = state.wheelRadius > 0.01f 
-                    ? state.wheelRadius 
+                float wheelRadius = state.wheelRadius > 0.01f
+                    ? state.wheelRadius
                     : (ctx.wheelSpec != null ? ctx.wheelSpec.wheelRadius : 0.3f);
 
             }

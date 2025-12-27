@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b3876b45ed3804caaa38c7f5cdff1927, type: 3}
   m_Name: DrivetrainSpec
   m_EditorClassIdentifier: Assembly-CSharp::Vehicle.Specs.DrivetrainSpec
-  driveType: 0
+  driveType: 1

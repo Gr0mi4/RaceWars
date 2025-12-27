@@ -17,7 +17,7 @@ namespace Vehicle.Specs
         [Min(0f)]
         [Tooltip("Linear damping applied to rigidbody. Higher = faster velocity reduction")]
         public float linearDamping = 0.05f;
-        
+
         /// <summary>
         /// Angular damping applied to the rigidbody. Higher values reduce rotation faster.
         /// </summary>

@@ -1,4 +1,3 @@
-// EngineSystem.cs
 using UnityEngine;
 using Vehicle.Specs;
 
@@ -6,76 +5,49 @@ namespace Vehicle.Systems
 {
     /// <summary>
     /// EngineSystem:
-    /// - Converts between wheel/engine angular speeds and RPM
-    /// - Reads torque/power curves from EngineSpec
-    /// - Applies a HARD-CUT rev limiter based on *mechanical RPM* (from wheels)
+    /// - kinematics: wheelOmega <-> engineRPM
+    /// - torque curve
+    /// - HARD CUT rev limiter (positive torque = 0 above redline)
+    /// - engine drag torque (engine braking)
     ///
-    /// IMPORTANT:
-    /// - In the new architecture, the rev limiter belongs to the ENGINE, not the gearbox.
-    /// - DrivetrainSystem will compute mechanical RPM from wheels and ask EngineSystem for
-    ///   torque with limiter applied.
+    /// "Shaft torque" = what engine actually sends into drivetrain (can be negative on overrun).
     /// </summary>
     public sealed class EngineSystem
     {
-        private const float HpToWatts = 745.7f;
+        // ---------------- KINEMATICS ----------------
 
-        // ---------- Kinematics ----------
-
-        public float CalculateEngineRPMFromWheel(float wheelAngularVelocityRadS, float gearRatio, float finalDriveRatio)
+        public float CalculateEngineRPMFromWheel(float wheelOmegaRadS, float gearRatio, float finalDriveRatio)
         {
-            if (finalDriveRatio <= 0f || Mathf.Abs(gearRatio) < 0.0001f)
+            if (finalDriveRatio <= 0f || Mathf.Abs(gearRatio) < 1e-6f)
                 return 0f;
 
-            float engineOmega = Mathf.Abs(wheelAngularVelocityRadS) * Mathf.Abs(gearRatio) * finalDriveRatio; // rad/s
-            float rpm = engineOmega * (60f / (2f * Mathf.PI));
-            return Mathf.Max(0f, rpm);
+            float engineOmega = Mathf.Abs(wheelOmegaRadS) * Mathf.Abs(gearRatio) * finalDriveRatio; // rad/s
+            return engineOmega * (60f / (2f * Mathf.PI));
         }
 
-        public float CalculateWheelAngularVelocityFromEngine(float engineRPM, float gearRatio, float finalDriveRatio)
+        public float CalculateWheelOmegaFromEngineRPM(float engineRpm, float gearRatio, float finalDriveRatio)
         {
-            if (finalDriveRatio <= 0f || Mathf.Abs(gearRatio) < 0.0001f)
+            if (finalDriveRatio <= 0f || Mathf.Abs(gearRatio) < 1e-6f)
                 return 0f;
 
-            float engineOmega = engineRPM * (2f * Mathf.PI / 60f); // rad/s
-            float wheelOmega = engineOmega / (Mathf.Abs(gearRatio) * finalDriveRatio);
-            return Mathf.Max(0f, wheelOmega);
+            float engineOmega = engineRpm * (2f * Mathf.PI / 60f);
+            return engineOmega / (Mathf.Abs(gearRatio) * finalDriveRatio);
         }
 
-        public float CalculateSpeedFromWheel(float wheelAngularVelocityRadS, float wheelRadius)
+        // ---------------- DRIVE TORQUE (positive) ----------------
+
+        public float GetDriveTorqueNm(float rpm, float throttle01, EngineSpec spec)
         {
-            if (wheelRadius <= 0f) return 0f;
-            return wheelAngularVelocityRadS * wheelRadius;
-        }
-
-        public float CalculateWheelAngularVelocityFromSpeed(float speedMS, float wheelRadius)
-        {
-            if (wheelRadius <= 0f) return 0f;
-            return speedMS / wheelRadius;
-        }
-
-        // ---------- Curves ----------
-
-        public float GetPowerWatts(float rpm, float throttle01, EngineSpec spec)
-        {
-            if (spec == null || throttle01 <= 0f) return 0f;
-
-            float t = NormalizeRPM01(rpm, spec.idleRPM, spec.maxRPM);
-            float mult = spec.powerCurve.Evaluate(t);
-            float hp = spec.maxPower * mult * throttle01;
-            return hp * HpToWatts;
-        }
-
-        public float GetTorqueNm(float rpm, float throttle01, EngineSpec spec, bool gearEngaged = true)
-        {
-            if (spec == null || !gearEngaged)
+            if (spec == null)
                 return 0f;
 
-            // "idle creep" behavior if you want it (your old logic)
+            throttle01 = Mathf.Clamp01(throttle01);
+
+            // optional idle creep behavior (kept)
             if (throttle01 <= 0f)
             {
                 if (Mathf.Abs(rpm - spec.idleRPM) < 50f)
                     return spec.idleTorque;
-
                 return 0f;
             }
 
@@ -84,40 +56,87 @@ namespace Vehicle.Systems
             return spec.maxTorque * mult * throttle01;
         }
 
-        // ---------- Rev limiter (HARD CUT) ----------
-
         /// <summary>
-        /// Returns engine torque with HARD-CUT rev limiter applied.
-        ///
-        /// HARD-CUT meaning:
-        /// - At/above maxRPM: torque becomes 0 (like fuel/spark cut).
-        /// - Below maxRPM: full curve torque.
-        ///
-        /// Input RPM must be *mechanical RPM* derived from wheelOmega (through gear ratios),
-        /// not a smoothed "display" RPM.
+        /// HARD CUT: above redline -> no positive drive torque.
         /// </summary>
-        public float GetTorqueHardCutLimitedNm(float mechanicalRpm, float throttle01, EngineSpec spec, bool gearEngaged = true)
+        public float GetDriveTorqueHardCutNm(float mechanicalRpm, float throttle01, EngineSpec spec)
         {
-            if (spec == null || !gearEngaged)
+            if (spec == null)
                 return 0f;
 
-            // If the driver isn't applying throttle, keep your idle behavior:
-            // (and we don't need limiter for that)
-            if (throttle01 <= 0f)
-                return GetTorqueNm(mechanicalRpm, throttle01, spec, gearEngaged);
+            throttle01 = Mathf.Clamp01(throttle01);
 
-            // HARD CUT: above redline -> zero torque
+            if (throttle01 <= 0f)
+                return GetDriveTorqueNm(mechanicalRpm, throttle01, spec);
+
             if (mechanicalRpm >= spec.maxRPM)
                 return 0f;
 
-            return GetTorqueNm(mechanicalRpm, throttle01, spec, gearEngaged);
+            return GetDriveTorqueNm(mechanicalRpm, throttle01, spec);
+        }
+
+        // ---------------- ENGINE DRAG (always resists rotation) ----------------
+
+        /// <summary>
+        /// Engine drag magnitude (Nm), positive величина.
+        /// В drivetrain её нужно применять ПРОТИВ вращения (против sign(engineOmega)).
+        /// </summary>
+        public float GetEngineDragTorqueNm(float rpm, float throttle01, EngineSpec spec)
+        {
+            if (spec == null) return 0f;
+
+            throttle01 = Mathf.Clamp01(throttle01);
+
+            // "good game defaults" - позже вынесешь в EngineSpec
+            const float baseFrictionNm = 12f;         // постоянное трение
+            const float viscousAtRedlineNm = 35f;     // растёт с rpm
+            const float closedThrottleExtraNm = 55f;  // доп. торможение при закрытом дросселе
+
+            float redline = Mathf.Max(spec.idleRPM + 1f, spec.maxRPM);
+            float t = Mathf.Clamp01(rpm / redline);
+
+            float friction = baseFrictionNm;
+            float viscous = viscousAtRedlineNm * (t * t); // квадратично приятно
+
+            float closed = Mathf.Lerp(closedThrottleExtraNm, 0f, throttle01); // throttle=0 => максимум
+
+            float drag = friction + viscous + closed;
+            return Mathf.Clamp(drag, 0f, 250f);
+        }
+
+        // ---------------- SHAFT TORQUE (drive - drag) ----------------
+
+        /// <summary>
+        /// Returns shaft torque on engine side (Nm).
+        /// Positive => accelerates engine / pulls car forward through gears.
+        /// Negative => engine braking (resists being back-driven by wheels).
+        ///
+        /// IMPORTANT: for in-gear physics, pass mechanicalRpm (from wheels).
+        /// </summary>
+        public float GetShaftTorqueNm(float mechanicalRpm, float throttle01, float engineOmegaSign, EngineSpec spec)
+        {
+            if (spec == null) return 0f;
+
+            float drive = GetDriveTorqueHardCutNm(mechanicalRpm, throttle01, spec);
+
+            float dragMag = GetEngineDragTorqueNm(mechanicalRpm, throttle01, spec);
+
+            // drag opposes rotation:
+            // if engine is being spun forward (omegaSign>0) => subtract drag
+            // if reverse => add drag
+            float dragSigned = -Mathf.Sign(engineOmegaSign) * dragMag;
+
+            // If sign is zero (standing), assume forward
+            if (Mathf.Abs(engineOmegaSign) < 1e-4f)
+                dragSigned = -dragMag;
+
+            return drive + dragSigned;
         }
 
         private float NormalizeRPM01(float rpm, float idle, float max)
         {
             if (max <= idle) return 0f;
-            float t = (rpm - idle) / (max - idle);
-            return Mathf.Clamp01(t);
+            return Mathf.Clamp01((rpm - idle) / (max - idle));
         }
     }
 }

@@ -1,11 +1,11 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.UI;
 using Vehicle.Core;
 using Vehicle.Specs;
 using Vehicle.UI.Telemetry;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 
 namespace Vehicle.UI
 {
@@ -14,7 +14,7 @@ namespace Vehicle.UI
     {
         [Header("References")]
         [SerializeField] private VehicleController vehicleController;
-        
+
         [Header("Module Visibility Settings")]
         [SerializeField] private bool showInputModule = true;
         [SerializeField] private bool showMotionModule = true;
@@ -23,29 +23,26 @@ namespace Vehicle.UI
         [SerializeField] private bool showForcesModule = true;
         [SerializeField] private bool showWheelsModule = false;
         [SerializeField] private bool showSuspensionModule = false;
-        
+
         [Header("Settings")]
         [SerializeField] private float updateInterval = 0.1f;
         [SerializeField] private float minScaleFactor = 0.7f;
-        [SerializeField] private float lineHeight = 20f;
-        [SerializeField] private float categorySpacing = 10f;
-        [SerializeField] private int categoryFontSize = 18;
         [SerializeField] private int dataFontSize = 14;
         [SerializeField] private Color categoryColor = Color.white;
         [SerializeField] private Color dataColor = Color.black;
-        
+
         private float _nextUpdateTime;
         private CarSpec _cachedCarSpec;
-        
+
         // Telemetry modules
         private InputTelemetryModule _inputModule;
         private MotionTelemetryModule _motionModule;
-        private EngineTelemetryModule _engineModule;
+        private PowertrainTelemetryModule _engineModule;
         private TransmissionTelemetryModule _transmissionModule;
         private ForcesTelemetryModule _forcesModule;
         private WheelsTelemetryModule _wheelsModule;
         private SuspensionTelemetryModule _suspensionModule;
-        
+
         // UI elements
         private GameObject _container;
         private Text _mainText;
@@ -57,7 +54,7 @@ namespace Vehicle.UI
             {
                 vehicleController = FindFirstObjectByType<VehicleController>();
             }
-            
+
             CacheCarSpec();
             InitializeModules();
             CreateUIElements();
@@ -66,8 +63,8 @@ namespace Vehicle.UI
         private void CacheCarSpec()
         {
             if (vehicleController == null) return;
-            
-            var field = typeof(VehicleController).GetField("carSpec", 
+
+            var field = typeof(VehicleController).GetField("carSpec",
                 BindingFlags.NonPublic | BindingFlags.Instance);
             if (field != null)
             {
@@ -79,7 +76,7 @@ namespace Vehicle.UI
         {
             _inputModule = new InputTelemetryModule(showInputModule);
             _motionModule = new MotionTelemetryModule(showMotionModule);
-            _engineModule = new EngineTelemetryModule(showEngineModule);
+            _engineModule = new PowertrainTelemetryModule(showEngineModule);
             _transmissionModule = new TransmissionTelemetryModule(showTransmissionModule);
             _forcesModule = new ForcesTelemetryModule(showForcesModule);
             _wheelsModule = new WheelsTelemetryModule(showWheelsModule);
@@ -90,7 +87,7 @@ namespace Vehicle.UI
         {
             if (vehicleController == null) return;
             if (Time.time < _nextUpdateTime) return;
-            
+
             _nextUpdateTime = Time.time + updateInterval;
             UpdateDisplay();
         }
@@ -99,22 +96,22 @@ namespace Vehicle.UI
         {
             var rb = vehicleController.GetComponent<Rigidbody>();
             if (rb == null || _mainText == null) return;
-            
+
             // Get vehicle state via reflection
-            var stateField = typeof(VehicleController).GetField("_state", 
+            var stateField = typeof(VehicleController).GetField("_state",
                 BindingFlags.NonPublic | BindingFlags.Instance);
             if (stateField == null) return;
-            
+
             var stateObj = stateField.GetValue(vehicleController);
             VehicleState state = GetVehicleStateFromObject(stateObj);
-            
+
             // Get input
             var inputProvider = vehicleController.GetComponent<Vehicle.Input.VehicleInputProvider>();
             VehicleInput input = inputProvider != null ? inputProvider.CurrentInput : VehicleInput.Zero;
-            
+
             // Build vehicle context
             VehicleContext ctx = BuildVehicleContext(rb, vehicleController.transform);
-            
+
             // Update module visibility from Inspector
             _inputModule.SetEnabled(showInputModule);
             _motionModule.SetEnabled(showMotionModule);
@@ -123,35 +120,35 @@ namespace Vehicle.UI
             _forcesModule.SetEnabled(showForcesModule);
             _wheelsModule.SetEnabled(showWheelsModule);
             _suspensionModule.SetEnabled(showSuspensionModule);
-            
+
             // Build display text from all enabled modules
             string displayText = string.Empty;
-            
+
             if (_inputModule.IsEnabled)
             {
                 displayText += _inputModule.GetDisplayText(input, state, ctx) + "\n";
             }
-            
+
             if (_motionModule.IsEnabled)
             {
                 displayText += _motionModule.GetDisplayText(input, state, ctx) + "\n";
             }
-            
+
             if (_engineModule.IsEnabled)
             {
                 displayText += _engineModule.GetDisplayText(input, state, ctx) + "\n";
             }
-            
+
             if (_transmissionModule.IsEnabled)
             {
                 displayText += _transmissionModule.GetDisplayText(input, state, ctx) + "\n";
             }
-            
+
             if (_wheelsModule.IsEnabled)
             {
                 displayText += _wheelsModule.GetDisplayText(input, state, ctx) + "\n";
             }
-            
+
             if (_forcesModule.IsEnabled)
             {
                 displayText += _forcesModule.GetDisplayText(input, state, ctx) + "\n";
@@ -161,57 +158,14 @@ namespace Vehicle.UI
             {
                 displayText += _suspensionModule.GetDisplayText(input, state, ctx) + "\n";
             }
-            
+
             _mainText.text = displayText;
         }
 
         private VehicleState GetVehicleStateFromObject(object stateObj)
         {
-            VehicleState state = new VehicleState();
-            
-            var rb = vehicleController.GetComponent<Rigidbody>();
-            var transform = vehicleController.transform;
-            
-            if (rb != null)
-            {
-                Vector3 worldVel = RigidbodyCompat.GetVelocity(rb);
-                Vector3 localVel = transform.InverseTransformDirection(worldVel);
-                
-                state.worldVelocity = worldVel;
-                state.localVelocity = localVel;
-                state.speed = worldVel.magnitude;
-                state.yawRate = rb.angularVelocity.y;
-            }
-            
-            // Get engine RPM
-            var rpmField = typeof(VehicleState).GetField("engineRPM");
-            if (rpmField != null && stateObj != null)
-            {
-                state.engineRPM = (float)rpmField.GetValue(stateObj);
-            }
-            
-            // Get wheel angular velocity
-            var wheelAngularVelField = typeof(VehicleState).GetField("wheelAngularVelocity");
-            if (wheelAngularVelField != null && stateObj != null)
-            {
-                state.wheelAngularVelocity = (float)wheelAngularVelField.GetValue(stateObj);
-            }
-            
-            // Get current gear
-            var gearField = typeof(VehicleState).GetField("currentGear");
-            if (gearField != null && stateObj != null)
-            {
-                state.currentGear = (int)gearField.GetValue(stateObj);
-            }
-            
-            // Get wheel radius
-            var wheelRadiusField = typeof(VehicleState).GetField("wheelRadius");
-            if (wheelRadiusField != null && stateObj != null)
-            {
-                state.wheelRadius = (float)wheelRadiusField.GetValue(stateObj);
-            }
-            
-            return state;
+            // VehicleState — struct, его можно безопасно скопировать
+            return stateObj is VehicleState s ? s : default;
         }
 
         private VehicleContext BuildVehicleContext(Rigidbody rb, Transform tr)
@@ -220,7 +174,7 @@ namespace Vehicle.UI
             {
                 return new VehicleContext(rb, tr, null, Time.deltaTime);
             }
-            
+
             return new VehicleContext(
                 rb,
                 tr,
@@ -246,51 +200,51 @@ namespace Vehicle.UI
                 canvas.renderMode = RenderMode.ScreenSpaceOverlay;
                 canvas.sortingOrder = 100;
             }
-            
+
             // Add CanvasScaler for proper scaling
             CanvasScaler scaler = GetComponent<CanvasScaler>();
             if (scaler == null)
             {
                 scaler = gameObject.AddComponent<CanvasScaler>();
             }
-            
+
             // Calculate current screen resolution
             float screenWidth = Screen.width;
             float screenHeight = Screen.height;
             float referenceWidth = 1920f;
             float referenceHeight = 1080f;
-            
+
             // Calculate scale based on width and height
             float scaleX = screenWidth / referenceWidth;
             float scaleY = screenHeight / referenceHeight;
             float scale = Mathf.Min(scaleX, scaleY);
-            
+
             // Apply minimum scale to prevent UI from becoming too small
             scale = Mathf.Max(scale, minScaleFactor);
-            
+
             // Adjust reference resolution to achieve desired scale
             Vector2 adjustedReference = new Vector2(
                 referenceWidth / scale,
                 referenceHeight / scale
             );
-            
+
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = adjustedReference;
             scaler.matchWidthOrHeight = 0.5f;
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            
+
             // Add GraphicRaycaster
             if (GetComponent<GraphicRaycaster>() == null)
             {
                 gameObject.AddComponent<GraphicRaycaster>();
             }
-            
+
             // Create container
             if (_container == null)
             {
                 _container = new GameObject("TelemetryContainer");
                 _container.transform.SetParent(transform, false);
-                
+
                 _containerRect = _container.AddComponent<RectTransform>();
                 _containerRect.anchorMin = new Vector2(0, 1);
                 _containerRect.anchorMax = new Vector2(0, 1);
@@ -298,20 +252,20 @@ namespace Vehicle.UI
                 _containerRect.anchoredPosition = new Vector2(20, -20);
                 _containerRect.sizeDelta = new Vector2(500, 1000);
             }
-            
+
             // Create main text element
             if (_mainText == null)
             {
                 GameObject textObj = new GameObject("TelemetryText");
                 textObj.transform.SetParent(_container.transform, false);
-                
+
                 RectTransform rect = textObj.AddComponent<RectTransform>();
                 rect.anchorMin = new Vector2(0, 1);
                 rect.anchorMax = new Vector2(0, 1);
                 rect.pivot = new Vector2(0, 1);
                 rect.anchoredPosition = Vector2.zero;
                 rect.sizeDelta = new Vector2(480, 980);
-                
+
                 _mainText = textObj.AddComponent<Text>();
                 _mainText.text = "";
                 _mainText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
