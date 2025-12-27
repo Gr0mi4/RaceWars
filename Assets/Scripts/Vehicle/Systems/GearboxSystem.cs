@@ -4,136 +4,146 @@ using Vehicle.Specs;
 namespace Vehicle.Systems
 {
     /// <summary>
-    /// Gearbox system for managing transmission behavior including gear shifting,
-    /// automatic transmission logic, and reverse gear handling.
+    /// Gearbox / transmission logic.
+    ///
+    /// Gear indexing:
+    /// -1 = Reverse
+    ///  0 = Neutral
+    ///  1..N = Forward gears (1-based)
+    ///
+    /// IMPORTANT:
+    /// - "Gear ratio only" means the selected gear ratio (e.g. 3.54)
+    /// - "Combined ratio" means gear ratio * finalDriveRatio
     /// </summary>
     public sealed class GearboxSystem
     {
         private readonly GearboxSpec _spec;
-        private int _currentGear;
+
+        private int _currentGear = 1;
         private float _shiftTimer;
         private bool _isShifting;
 
-        /// <summary>
-        /// Gets the current gear index.
-        /// -1 = reverse, 0 = neutral, 1+ = forward gears (1st, 2nd, etc.).
-        /// </summary>
-        public int CurrentGear => _currentGear;
+        // Prevent shift spam (especially important once wheel slip exists)
+        private float _shiftCooldownTimer;
+        private const float MinTimeBetweenShifts = 0.15f;
 
-        /// <summary>
-        /// Gets whether the transmission is currently shifting gears.
-        /// During shifting, no power is transmitted to the wheels.
-        /// </summary>
+        public int CurrentGear => _currentGear;
         public bool IsShifting => _isShifting;
 
-        /// <summary>
-        /// Initializes a new instance of the GearboxSystem with the specified gearbox specification.
-        /// </summary>
-        /// <param name="spec">Gearbox specification containing gear ratios, shift points, and transmission type.</param>
         public GearboxSystem(GearboxSpec spec)
         {
             _spec = spec ?? throw new System.ArgumentNullException(nameof(spec));
-            _currentGear = 1; // Start in 1st gear
+
+            // Start in 1st gear by default
+            _currentGear = 1;
             _shiftTimer = 0f;
             _isShifting = false;
+            _shiftCooldownTimer = 0f;
         }
 
-        /// <summary>
-        /// Updates the gearbox state, handling automatic shifting and shift timing.
-        /// Should be called every physics frame.
-        /// </summary>
-        /// <param name="currentRPM">Current engine RPM.</param>
-        /// <param name="speed">Current vehicle speed in m/s (absolute value).</param>
-        /// <param name="throttle">Current throttle input (0-1).</param>
-        /// <param name="deltaTime">Time elapsed since last update in seconds.</param>
-        public void Update(float currentRPM, float speed, float throttle, float deltaTime)
+        public void Update(float currentRPM, float speedAbs, float throttle01, float dt)
         {
             if (_spec == null)
-            {
                 return;
-            }
 
-            // Update shift timer
+            throttle01 = Mathf.Clamp01(throttle01);
+            speedAbs = Mathf.Abs(speedAbs);
+
+            // cooldown timer
+            if (_shiftCooldownTimer > 0f)
+                _shiftCooldownTimer = Mathf.Max(0f, _shiftCooldownTimer - dt);
+
+            // shifting timer
             if (_isShifting)
             {
-                _shiftTimer -= deltaTime;
+                _shiftTimer -= dt;
                 if (_shiftTimer <= 0f)
                 {
                     _isShifting = false;
                     _shiftTimer = 0f;
                 }
-                return; // Don't allow shifting while already shifting
+                return;
             }
 
-            // Handle automatic transmission (only if transmission type is Automatic)
+            // Automatic shifting logic
             if (_spec.transmissionType == GearboxSpec.TransmissionType.Automatic)
             {
-                // Only auto-shift if we're in a forward gear (not reverse or neutral)
-                if (_currentGear > 0)
+                // Only auto-shift in forward gears
+                if (_currentGear > 0 && _shiftCooldownTimer <= 0f)
                 {
-                    // Check for upshift
-                    if (currentRPM >= _spec.autoShiftUpRPM && 
-                        speed >= _spec.minSpeedForUpshift &&
-                        _currentGear < _spec.gearRatios.Length)
-                    {
-                        ShiftUp();
-                    }
-                    // Check for downshift
-                    else if (currentRPM <= _spec.autoShiftDownRPM && 
-                             _currentGear > 1 &&
-                             throttle > 0.1f) // Only downshift if throttle is applied
-                    {
-                        ShiftDown();
-                    }
+                    bool canUpshift =
+                        currentRPM >= _spec.autoShiftUpRPM &&
+                        speedAbs >= _spec.minSpeedForUpshift &&
+                        _currentGear < _spec.gearRatios.Length;
+
+                    bool canDownshift =
+                        currentRPM <= _spec.autoShiftDownRPM &&
+                        _currentGear > 1 &&
+                        throttle01 > 0.1f;
+
+                    if (canUpshift) ShiftUp();
+                    else if (canDownshift) ShiftDown();
                 }
             }
-            // Manual transmission: shifting is handled externally by DriveSystem based on user input
         }
 
+        // --------------------------------------------------------------------
+        // Ratios
+        // --------------------------------------------------------------------
+
         /// <summary>
-        /// Gets the current gear ratio (including final drive ratio).
-        /// Returns positive value for forward gears, negative for reverse, 0 for neutral.
+        /// Returns gear ratio WITHOUT final drive (signed).
+        /// Reverse -> negative.
+        /// Neutral -> 0.
         /// </summary>
-        /// <returns>Current gear ratio multiplied by final drive ratio. Returns 0 if invalid.</returns>
-        public float GetCurrentGearRatio()
+        public float GetGearRatioOnly()
         {
             if (_spec == null || _isShifting)
-            {
-                return 0f; // No power during shift
-            }
+                return 0f;
 
             if (_currentGear == -1)
-            {
-                // Reverse gear
-                return -_spec.reverseGearRatio * _spec.finalDriveRatio;
-            }
-            else if (_currentGear == 0)
-            {
-                // Neutral
+                return -_spec.reverseGearRatio;
+
+            if (_currentGear == 0)
                 return 0f;
-            }
-            else if (_currentGear > 0 && _currentGear <= _spec.gearRatios.Length)
+
+            if (_currentGear > 0 && _currentGear <= _spec.gearRatios.Length)
             {
-                // Forward gear (1-based index, array is 0-based)
-                int arrayIndex = _currentGear - 1;
-                return _spec.gearRatios[arrayIndex] * _spec.finalDriveRatio;
+                int idx = _currentGear - 1;
+                return _spec.gearRatios[idx];
             }
 
             return 0f;
         }
 
         /// <summary>
-        /// Shifts to the next higher gear (upshift).
+        /// Returns gear ratio * finalDriveRatio (signed).
+        /// This matches your previous GetCurrentGearRatio() behavior.
         /// </summary>
-        /// <returns>True if shift was successful, false if already in highest gear or currently shifting.</returns>
+        public float GetCombinedRatio()
+        {
+            float gearOnly = GetGearRatioOnly();
+            if (Mathf.Abs(gearOnly) < 1e-6f)
+                return 0f;
+
+            return gearOnly * _spec.finalDriveRatio;
+        }
+
+        /// <summary>
+        /// Backward-compatible name (keeps old code working):
+        /// returns COMBINED ratio (gear * finalDrive).
+        /// </summary>
+        public float GetCurrentGearRatio() => GetCombinedRatio();
+
+        // --------------------------------------------------------------------
+        // Shift operations
+        // --------------------------------------------------------------------
+
         public bool ShiftUp()
         {
-            if (_isShifting || _spec == null)
-            {
+            if (!CanStartShift())
                 return false;
-            }
 
-            // Can't shift up from reverse - must go to neutral first
             if (_currentGear == -1)
             {
                 _currentGear = 0;
@@ -141,7 +151,6 @@ namespace Vehicle.Systems
                 return true;
             }
 
-            // Can't shift up from neutral - go to 1st gear
             if (_currentGear == 0)
             {
                 _currentGear = 1;
@@ -149,35 +158,22 @@ namespace Vehicle.Systems
                 return true;
             }
 
-            // Check if we're already in the highest gear
             if (_currentGear >= _spec.gearRatios.Length)
-            {
                 return false;
-            }
 
             _currentGear++;
             StartShift();
             return true;
         }
 
-        /// <summary>
-        /// Shifts to the next lower gear (downshift).
-        /// </summary>
-        /// <returns>True if shift was successful, false if already in 1st gear or currently shifting.</returns>
         public bool ShiftDown()
         {
-            if (_isShifting || _spec == null)
-            {
+            if (!CanStartShift())
                 return false;
-            }
 
-            // Can't shift down from reverse
             if (_currentGear == -1)
-            {
                 return false;
-            }
 
-            // From neutral, go to reverse
             if (_currentGear == 0)
             {
                 _currentGear = -1;
@@ -185,7 +181,6 @@ namespace Vehicle.Systems
                 return true;
             }
 
-            // From 1st gear, go to neutral
             if (_currentGear == 1)
             {
                 _currentGear = 0;
@@ -198,52 +193,44 @@ namespace Vehicle.Systems
             return true;
         }
 
-        /// <summary>
-        /// Shifts directly to reverse gear.
-        /// </summary>
-        /// <returns>True if shift was successful, false if currently shifting.</returns>
         public bool ShiftToReverse()
         {
-            if (_isShifting || _spec == null)
-            {
+            if (!CanStartShift())
                 return false;
-            }
 
-            // Can only shift to reverse from neutral or 1st gear at very low speed
             if (_currentGear == -1)
-            {
-                return false; // Already in reverse
-            }
+                return false;
 
             _currentGear = -1;
             StartShift();
             return true;
         }
 
-        /// <summary>
-        /// Shifts to neutral gear.
-        /// </summary>
-        /// <returns>True if shift was successful, false if currently shifting.</returns>
         public bool ShiftToNeutral()
         {
-            if (_isShifting || _spec == null)
-            {
+            if (!CanStartShift())
                 return false;
-            }
 
             _currentGear = 0;
             StartShift();
             return true;
         }
 
-        /// <summary>
-        /// Starts the shift timer. Called internally when a gear change occurs.
-        /// </summary>
+        private bool CanStartShift()
+        {
+            if (_spec == null) return false;
+            if (_isShifting) return false;
+            if (_shiftCooldownTimer > 0f) return false;
+            return true;
+        }
+
         private void StartShift()
         {
             _isShifting = true;
-            _shiftTimer = _spec.shiftTime;
+            _shiftTimer = Mathf.Max(0.01f, _spec.shiftTime);
+
+            // cooldown prevents immediate double shifts in the next frame
+            _shiftCooldownTimer = Mathf.Max(_shiftCooldownTimer, MinTimeBetweenShifts);
         }
     }
 }
-

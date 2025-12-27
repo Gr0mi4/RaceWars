@@ -53,6 +53,8 @@ namespace Vehicle.Core
         private VehiclePipeline _pipeline;
         private Rigidbody _rb;
         private VehicleState _state;
+        public VehicleState State => _state;
+
 
         private void Awake()
         {
@@ -165,43 +167,31 @@ namespace Vehicle.Core
                 ));
             }
 
-            // 2. Drive System - applies engine/gearbox forces
-            if (carSpec?.engineSpec != null && carSpec?.gearboxSpec != null)
-            {
-                modules.Add(new DriveSystem(forceMultiplier: 1.0f));
-            }
-
-            // 3. Steering System - applies yaw torque
-            if (carSpec?.steeringSpec != null)
-            {
-                modules.Add(new SteeringSystem(carSpec.steeringSpec));
-            }
-
-            // 4. Aerodynamic Drag System - applies drag force
-            if (carSpec?.chassisSpec != null)
-            {
-                modules.Add(new AerodragSystem(airDensity, minSpeedForDrag));
-            }
-
-            // 5. Suspension System - placeholder for future implementation
             if (carSpec?.suspensionSpec != null)
             {
                 modules.Add(new SuspensionSystem());
             }
 
-            // 6. Rolling Resistance System - apply per-wheel rolling drag
-            if (carSpec?.wheelSpec != null)
+            if (carSpec?.steeringSpec != null)
             {
-                modules.Add(new RollingResistanceSystem());
+                modules.Add(new SteeringSystem(carSpec.steeringSpec));
             }
 
-            // 7. Drivetrain System - placeholder for future implementation
             if (carSpec?.drivetrainSpec != null)
             {
                 modules.Add(new DrivetrainSystem());
             }
 
-            // 8. Telemetry System - debug/utility (optional)
+            modules.Add(new BrakingSystem());
+
+            modules.Add(new TireForcesSystem());
+
+            if (carSpec?.chassisSpec != null)
+            {
+                modules.Add(new AerodragSystem(airDensity, minSpeedForDrag));
+            }
+            
+
             if (enableTelemetry)
             {
                 modules.Add(new TelemetrySystem(enableTelemetry, telemetryInterval, logCollisions));

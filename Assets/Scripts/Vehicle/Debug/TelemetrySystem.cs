@@ -104,15 +104,6 @@ namespace Vehicle.Debug
 
                 // Calculate wheel force using EngineSystem
                 var engineSystem = new EngineSystem();
-                wheelForce = engineSystem.CalculateWheelForce(
-                    forwardSpeed,
-                    input.throttle,
-                    ctx.engineSpec,
-                    state.engineRPM,
-                    currentGearRatio,
-                    ctx.gearboxSpec.finalDriveRatio,
-                    wheelRadius
-                );
             }
 
             // Net Force (wheel - drag - damping)

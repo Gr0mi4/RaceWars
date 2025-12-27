@@ -1,254 +1,123 @@
+// EngineSystem.cs
 using UnityEngine;
 using Vehicle.Specs;
 
 namespace Vehicle.Systems
 {
     /// <summary>
-    /// Engine system for calculating engine behavior including RPM, power, torque, and wheel force.
-    /// Uses power and torque curves from EngineSpec to provide realistic engine characteristics.
+    /// EngineSystem:
+    /// - Converts between wheel/engine angular speeds and RPM
+    /// - Reads torque/power curves from EngineSpec
+    /// - Applies a HARD-CUT rev limiter based on *mechanical RPM* (from wheels)
+    ///
+    /// IMPORTANT:
+    /// - In the new architecture, the rev limiter belongs to the ENGINE, not the gearbox.
+    /// - DrivetrainSystem will compute mechanical RPM from wheels and ask EngineSystem for
+    ///   torque with limiter applied.
     /// </summary>
     public sealed class EngineSystem
     {
-        /// <summary>
-        /// Conversion factor from horsepower to watts: 1 HP = 745.7 W.
-        /// </summary>
         private const float HpToWatts = 745.7f;
 
-        /// <summary>
-        /// Calculates engine RPM from wheel angular velocity, gear ratio, and final drive ratio.
-        /// Formula: ω_engine = ω_wheel × gearRatio × finalDriveRatio
-        /// Then converts to RPM: RPM = (ω_engine × 60) / (2π)
-        /// </summary>
-        /// <param name="wheelAngularVelocity">Wheel angular velocity in rad/s.</param>
-        /// <param name="gearRatio">Current gear ratio (positive for forward, negative for reverse).</param>
-        /// <param name="finalDriveRatio">Final drive ratio (differential ratio).</param>
-        /// <returns>Engine RPM. Returns 0 if inputs are invalid.</returns>
-        public float CalculateEngineRPMFromWheel(float wheelAngularVelocity, float gearRatio, float finalDriveRatio)
+        // ---------- Kinematics ----------
+
+        public float CalculateEngineRPMFromWheel(float wheelAngularVelocityRadS, float gearRatio, float finalDriveRatio)
         {
-            if (finalDriveRatio <= 0f || Mathf.Abs(gearRatio) < 0.01f)
-            {
+            if (finalDriveRatio <= 0f || Mathf.Abs(gearRatio) < 0.0001f)
                 return 0f;
-            }
 
-            // Calculate engine angular velocity: ω_engine = ω_wheel × gearRatio × finalDriveRatio
-            float engineAngularVelocity = wheelAngularVelocity * Mathf.Abs(gearRatio) * finalDriveRatio;
-
-            // Convert to RPM: RPM = (rad/s) × (60 / 2π)
-            float rpm = engineAngularVelocity * (60f / (2f * Mathf.PI));
-
+            float engineOmega = Mathf.Abs(wheelAngularVelocityRadS) * Mathf.Abs(gearRatio) * finalDriveRatio; // rad/s
+            float rpm = engineOmega * (60f / (2f * Mathf.PI));
             return Mathf.Max(0f, rpm);
         }
 
-        /// <summary>
-        /// Calculates wheel angular velocity from engine RPM, gear ratio, and final drive ratio.
-        /// Formula: ω_wheel = ω_engine / (gearRatio × finalDriveRatio)
-        /// </summary>
-        /// <param name="engineRPM">Engine RPM (crankshaft revolutions per minute).</param>
-        /// <param name="gearRatio">Current gear ratio (positive for forward, negative for reverse).</param>
-        /// <param name="finalDriveRatio">Final drive ratio (differential ratio).</param>
-        /// <returns>Wheel angular velocity in rad/s. Returns 0 if inputs are invalid.</returns>
         public float CalculateWheelAngularVelocityFromEngine(float engineRPM, float gearRatio, float finalDriveRatio)
         {
-            if (finalDriveRatio <= 0f || Mathf.Abs(gearRatio) < 0.01f)
-            {
+            if (finalDriveRatio <= 0f || Mathf.Abs(gearRatio) < 0.0001f)
                 return 0f;
-            }
 
-            // Convert RPM to rad/s: ω = RPM × (2π / 60)
-            float engineAngularVelocity = engineRPM * (2f * Mathf.PI / 60f);
-
-            // Calculate wheel angular velocity: ω_wheel = ω_engine / (gearRatio × finalDriveRatio)
-            float wheelAngularVelocity = engineAngularVelocity / (Mathf.Abs(gearRatio) * finalDriveRatio);
-
-            return Mathf.Max(0f, wheelAngularVelocity);
+            float engineOmega = engineRPM * (2f * Mathf.PI / 60f); // rad/s
+            float wheelOmega = engineOmega / (Mathf.Abs(gearRatio) * finalDriveRatio);
+            return Mathf.Max(0f, wheelOmega);
         }
 
-        /// <summary>
-        /// Calculates vehicle speed from wheel angular velocity and wheel radius.
-        /// Formula: v = ω_wheel × wheelRadius
-        /// </summary>
-        /// <param name="wheelAngularVelocity">Wheel angular velocity in rad/s.</param>
-        /// <param name="wheelRadius">Wheel radius in meters.</param>
-        /// <returns>Vehicle speed in m/s. Returns 0 if inputs are invalid.</returns>
-        public float CalculateSpeedFromWheel(float wheelAngularVelocity, float wheelRadius)
+        public float CalculateSpeedFromWheel(float wheelAngularVelocityRadS, float wheelRadius)
         {
-            if (wheelRadius <= 0f)
-            {
-                return 0f;
-            }
-
-            // Calculate speed: v = ω × r
-            return wheelAngularVelocity * wheelRadius;
+            if (wheelRadius <= 0f) return 0f;
+            return wheelAngularVelocityRadS * wheelRadius;
         }
 
-        /// <summary>
-        /// Calculates wheel angular velocity from vehicle speed and wheel radius.
-        /// Formula: ω_wheel = v / wheelRadius
-        /// </summary>
-        /// <param name="speed">Vehicle speed in m/s. Can be negative for reverse.</param>
-        /// <param name="wheelRadius">Wheel radius in meters.</param>
-        /// <returns>Wheel angular velocity in rad/s. Returns 0 if inputs are invalid.</returns>
-        public float CalculateWheelAngularVelocityFromSpeed(float speed, float wheelRadius)
+        public float CalculateWheelAngularVelocityFromSpeed(float speedMS, float wheelRadius)
         {
-            if (wheelRadius <= 0f)
-            {
-                return 0f;
-            }
-
-            // Calculate wheel angular velocity: ω = v / r
-            return speed / wheelRadius;
+            if (wheelRadius <= 0f) return 0f;
+            return speedMS / wheelRadius;
         }
 
-        /// <summary>
-        /// Gets the current engine power at a given RPM and throttle position.
-        /// Power is calculated from the power curve in EngineSpec, scaled by maxPower and throttle.
-        /// </summary>
-        /// <param name="rpm">Current engine RPM.</param>
-        /// <param name="throttle">Throttle input (0-1).</param>
-        /// <param name="engineSpec">Engine specification containing power curve and max power.</param>
-        /// <returns>Current engine power in watts. Returns 0 if spec is null or invalid.</returns>
-        public float GetPower(float rpm, float throttle, EngineSpec engineSpec)
+        // ---------- Curves ----------
+
+        public float GetPowerWatts(float rpm, float throttle01, EngineSpec spec)
         {
-            if (engineSpec == null || throttle <= 0f)
-            {
-                return 0f;
-            }
+            if (spec == null || throttle01 <= 0f) return 0f;
 
-            // Normalize RPM to 0-1 range (0 = idleRPM, 1 = maxRPM)
-            float normalizedRPM = NormalizeRPM(rpm, engineSpec.idleRPM, engineSpec.maxRPM);
-
-            // Get power multiplier from curve (0-1)
-            float powerMultiplier = engineSpec.powerCurve.Evaluate(normalizedRPM);
-
-            // Calculate current power: P = maxPower * curve(rpm) * throttle
-            float powerHP = engineSpec.maxPower * powerMultiplier * throttle;
-
-            // Convert HP to watts
-            return powerHP * HpToWatts;
+            float t = NormalizeRPM01(rpm, spec.idleRPM, spec.maxRPM);
+            float mult = spec.powerCurve.Evaluate(t);
+            float hp = spec.maxPower * mult * throttle01;
+            return hp * HpToWatts;
         }
 
-        /// <summary>
-        /// Gets the current engine torque at a given RPM and throttle position.
-        /// Torque is calculated from the torque curve in EngineSpec, scaled by maxTorque and throttle.
-        /// When throttle is 0, returns idle torque if RPM is near idle (allows vehicle to creep at idle).
-        /// </summary>
-        /// <param name="rpm">Current engine RPM.</param>
-        /// <param name="throttle">Throttle input (0-1).</param>
-        /// <param name="engineSpec">Engine specification containing torque curve and max torque.</param>
-        /// <param name="gearEngaged">Whether a gear is engaged (not neutral). If false, returns 0 even at idle.</param>
-        /// <returns>Current engine torque in Newton-meters. Returns 0 if spec is null or gear not engaged.</returns>
-        public float GetTorque(float rpm, float throttle, EngineSpec engineSpec, bool gearEngaged = true)
+        public float GetTorqueNm(float rpm, float throttle01, EngineSpec spec, bool gearEngaged = true)
         {
-            if (engineSpec == null || !gearEngaged)
+            if (spec == null || !gearEngaged)
+                return 0f;
+
+            // "idle creep" behavior if you want it (your old logic)
+            if (throttle01 <= 0f)
             {
+                if (Mathf.Abs(rpm - spec.idleRPM) < 50f)
+                    return spec.idleTorque;
+
                 return 0f;
             }
 
-            // If throttle is 0, return idle torque only if RPM is at idle (allows creeping at idle)
-            if (throttle <= 0f)
-            {
-                if (Mathf.Abs(rpm - engineSpec.idleRPM) < 50f)
-                {
-                    return engineSpec.idleTorque;
-                }
-                return 0f;
-            }
-
-            // Normalize RPM to 0-1 range (0 = idleRPM, 1 = maxRPM)
-            float normalizedRPM = NormalizeRPM(rpm, engineSpec.idleRPM, engineSpec.maxRPM);
-
-            // Get torque multiplier from curve (0-1) based on current RPM
-            float torqueMultiplier = engineSpec.torqueCurve.Evaluate(normalizedRPM);
-
-            // Calculate torque: T = maxTorque * curve(rpm) * throttle
-            // This is the standard formula: torque depends on RPM (from curve) and throttle position
-            // As throttle increases, torque increases. As RPM changes, torque changes according to curve.
-            float torque = engineSpec.maxTorque * torqueMultiplier * throttle;
-            
-            return torque;
+            float t = NormalizeRPM01(rpm, spec.idleRPM, spec.maxRPM);
+            float mult = spec.torqueCurve.Evaluate(t);
+            return spec.maxTorque * mult * throttle01;
         }
 
+        // ---------- Rev limiter (HARD CUT) ----------
+
         /// <summary>
-        /// Calculates the force applied to the wheels based on engine power, torque, speed, and gear ratio.
-        /// At low speeds, uses torque-based calculation. At higher speeds, uses power-based calculation.
-        /// Formula at low speed: F = (T * gearRatio * finalDriveRatio) / wheelRadius
-        /// Formula at high speed: F = P / v (where P is power in watts, v is speed in m/s)
-        /// Note: This method is used for telemetry/display purposes. The actual force application
-        /// in DriveSystem uses the direct chain: engineRPM → torque → wheelTorque → wheelForce.
+        /// Returns engine torque with HARD-CUT rev limiter applied.
+        ///
+        /// HARD-CUT meaning:
+        /// - At/above maxRPM: torque becomes 0 (like fuel/spark cut).
+        /// - Below maxRPM: full curve torque.
+        ///
+        /// Input RPM must be *mechanical RPM* derived from wheelOmega (through gear ratios),
+        /// not a smoothed "display" RPM.
         /// </summary>
-        /// <param name="speed">Vehicle speed in m/s. Can be negative for reverse.</param>
-        /// <param name="throttle">Throttle input (0-1).</param>
-        /// <param name="engineSpec">Engine specification.</param>
-        /// <param name="currentRPM">Current engine RPM (crankshaft revolutions per minute).</param>
-        /// <param name="gearRatio">Current gear ratio (positive for forward, negative for reverse).</param>
-        /// <param name="finalDriveRatio">Final drive ratio (differential ratio).</param>
-        /// <param name="wheelRadius">Wheel radius in meters.</param>
-        /// <returns>Force in Newtons applied to the wheels. Positive for forward, negative for reverse.</returns>
-        public float CalculateWheelForce(
-            float speed,
-            float throttle,
-            EngineSpec engineSpec,
-            float currentRPM,
-            float gearRatio,
-            float finalDriveRatio,
-            float wheelRadius,
-            bool gearEngaged = true)
+        public float GetTorqueHardCutLimitedNm(float mechanicalRpm, float throttle01, EngineSpec spec, bool gearEngaged = true)
         {
-            if (engineSpec == null || wheelRadius <= 0f || !gearEngaged)
-            {
+            if (spec == null || !gearEngaged)
                 return 0f;
-            }
 
-            float absSpeed = Mathf.Abs(speed);
-            float absGearRatio = Mathf.Abs(gearRatio);
+            // If the driver isn't applying throttle, keep your idle behavior:
+            // (and we don't need limiter for that)
+            if (throttle01 <= 0f)
+                return GetTorqueNm(mechanicalRpm, throttle01, spec, gearEngaged);
 
-            // At very low speeds, use torque-based calculation to avoid division by zero
-            // and to provide better low-speed acceleration
-            if (absSpeed < engineSpec.minSpeedForPower)
-            {
-                // Get current torque (gearEngaged is passed to allow idle torque when throttle = 0)
-                float torque = GetTorque(currentRPM, throttle, engineSpec, gearEngaged);
+            // HARD CUT: above redline -> zero torque
+            if (mechanicalRpm >= spec.maxRPM)
+                return 0f;
 
-                // Calculate force from torque: F = (T * gearRatio * finalDriveRatio) / wheelRadius
-                // This is the standard formula: Torque at wheel = Engine Torque * Gear Ratio * Final Drive
-                float wheelTorque = torque * absGearRatio * finalDriveRatio;
-                float force = wheelTorque / wheelRadius;
-
-                // Apply direction based on gear (forward = positive, reverse = negative)
-                return Mathf.Sign(gearRatio) * force;
-            }
-            else
-            {
-                // At higher speeds, use power-based calculation: F = P / v
-                // This is more accurate at speed because power is constant, force decreases with speed
-                float power = GetPower(currentRPM, throttle, engineSpec);
-
-                // Avoid division by zero
-                float effectiveSpeed = Mathf.Max(absSpeed, engineSpec.minSpeedForPower);
-                float force = power / effectiveSpeed;
-
-                // Apply direction based on gear (forward = positive, reverse = negative)
-                return Mathf.Sign(gearRatio) * force;
-            }
+            return GetTorqueNm(mechanicalRpm, throttle01, spec, gearEngaged);
         }
 
-        /// <summary>
-        /// Normalizes RPM value to 0-1 range based on idle and max RPM.
-        /// </summary>
-        /// <param name="rpm">Current RPM value.</param>
-        /// <param name="idleRPM">Idle RPM (maps to 0).</param>
-        /// <param name="maxRPM">Maximum RPM (maps to 1).</param>
-        /// <returns>Normalized RPM value (0-1). Clamped to valid range.</returns>
-        private float NormalizeRPM(float rpm, float idleRPM, float maxRPM)
+        private float NormalizeRPM01(float rpm, float idle, float max)
         {
-            if (maxRPM <= idleRPM)
-            {
-                return 0f;
-            }
-
-            float normalized = (rpm - idleRPM) / (maxRPM - idleRPM);
-            return Mathf.Clamp01(normalized);
+            if (max <= idle) return 0f;
+            float t = (rpm - idle) / (max - idle);
+            return Mathf.Clamp01(t);
         }
     }
 }
-

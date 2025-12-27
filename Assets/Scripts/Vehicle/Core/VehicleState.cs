@@ -55,6 +55,14 @@ namespace Vehicle.Core
         /// Wheel radius in meters. Set by wheel modules.
         /// </summary>
         public float wheelRadius;
+
+        /// <summary>
+        /// Wheel radius in meters. Set by wheel modules.
+        /// </summary>
+        /// /// <summary>
+        /// Steering    
+        /// </summary>
+        public float steerAngleDeg;        
     }
 
     /// <summary>
@@ -68,5 +76,15 @@ namespace Vehicle.Core
         public float normalForce;
         public float compression;
         public float angularVelocity;
+        public float compressionFiltered;
+        public Vector3 debugDriveForce;
+        public Vector3 debugLateralForce;
+        public Vector3 wheelForwardWorld;
+        public float wheelOmega;
+        public float driveTorque;
+        public float brakeTorque;
+        public Vector3 debugLongForce; 
+        public Vector3 debugLatForce;
+        public float debugUtil;
     }
 }

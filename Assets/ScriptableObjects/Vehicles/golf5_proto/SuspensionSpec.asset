@@ -12,3 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fcbd6aefb10174f4c8877d1a4d2fa66a, type: 3}
   m_Name: SuspensionSpec
   m_EditorClassIdentifier: Assembly-CSharp::Vehicle.Specs.SuspensionSpec
+  spring: 30000
+  damper: 30000
+  compressionSmoothingTime: 0.5
+  restLength: 0.75
+  maxCompression: 0.25
+  maxDroop: 0.15
+  maxDamperForce: 12000
+  maxForce: 12000

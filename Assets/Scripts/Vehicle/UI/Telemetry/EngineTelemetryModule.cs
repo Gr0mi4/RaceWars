@@ -87,7 +87,6 @@ namespace Vehicle.UI.Telemetry
                 powerKW = powerHP * 0.7457f;
 
                 torqueMultiplier = ctx.engineSpec.torqueCurve.Evaluate(normalizedRPM);
-                engineTorque = _engineSystem.GetTorque(rpm, throttle, ctx.engineSpec, gearEngaged);
             }
 
             // Calculate wheel torque and force

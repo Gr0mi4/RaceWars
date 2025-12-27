@@ -16,7 +16,7 @@ MonoBehaviour:
   maxTorque: 150
   maxRPM: 6500
   idleRPM: 800
-  idleTorque: 25
+  idleTorque: 0
   rpmInertia: 10
   powerCurve:
     serializedVersion: 2

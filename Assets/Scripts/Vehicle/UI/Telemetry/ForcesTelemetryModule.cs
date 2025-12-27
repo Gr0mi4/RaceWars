@@ -73,15 +73,6 @@ namespace Vehicle.UI.Telemetry
                     ? state.wheelRadius 
                     : (ctx.wheelSpec != null ? ctx.wheelSpec.wheelRadius : 0.3f);
 
-                wheelForce = _engineSystem.CalculateWheelForce(
-                    forwardSpeed,
-                    input.throttle,
-                    ctx.engineSpec,
-                    state.engineRPM,
-                    currentGearRatio,
-                    ctx.gearboxSpec.finalDriveRatio,
-                    wheelRadius
-                );
             }
 
             float netForce = wheelForce - dragForce - dampingForce;

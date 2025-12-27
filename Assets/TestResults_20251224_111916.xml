@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="4" result="Failed(Child)" total="4" passed="1" failed="3" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2025-12-24 10:19:00Z" end-time="2025-12-24 10:19:00Z" duration="0,0096948">
+  <test-suite type="TestSuite" id="1093" name="My project" fullname="My project" runstate="Runnable" testcasecount="72" result="Failed" site="Child" start-time="2025-12-24 10:19:00Z" end-time="2025-12-24 10:19:00Z" duration="0.009695" total="4" passed="1" failed="3" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <failure>
+      <message><![CDATA[One or more child tests had errors]]></message>
+    </failure>
+    <test-suite type="Assembly" id="1079" name="Assembly-CSharp-Editor.dll" fullname="C:/Game/My project/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="72" result="Failed" site="Child" start-time="2025-12-24 10:19:00Z" end-time="2025-12-24 10:19:00Z" duration="0.006207" total="4" passed="1" failed="3" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="8940" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <failure>
+        <message><![CDATA[One or more child tests had errors]]></message>
+      </failure>
+      <test-suite type="TestSuite" id="1080" name="Vehicle" fullname="Vehicle" runstate="Runnable" testcasecount="72" result="Failed" site="Child" start-time="2025-12-24 10:19:00Z" end-time="2025-12-24 10:19:00Z" duration="0.005350" total="4" passed="1" failed="3" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <failure>
+          <message><![CDATA[One or more child tests had errors]]></message>
+        </failure>
+        <test-suite type="TestSuite" id="1081" name="Tests" fullname="Vehicle.Tests" runstate="Runnable" testcasecount="72" result="Failed" site="Child" start-time="2025-12-24 10:19:00Z" end-time="2025-12-24 10:19:00Z" duration="0.004527" total="4" passed="1" failed="3" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <failure>
+            <message><![CDATA[One or more child tests had errors]]></message>
+          </failure>
+          <test-suite type="TestSuite" id="1082" name="Steering" fullname="Vehicle.Tests.Steering" runstate="Runnable" testcasecount="29" result="Failed" site="Child" start-time="2025-12-24 10:19:00Z" end-time="2025-12-24 10:19:00Z" duration="0.003436" total="4" passed="1" failed="3" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <failure>
+              <message><![CDATA[One or more child tests had errors]]></message>
+            </failure>
+            <test-suite type="TestFixture" id="1028" name="SteeringModuleTests" fullname="Vehicle.Tests.Steering.SteeringModuleTests" classname="Vehicle.Tests.Steering.SteeringModuleTests" runstate="Runnable" testcasecount="4" result="Failed" site="Child" start-time="2025-12-24 10:19:00Z" end-time="2025-12-24 10:19:00Z" duration="0.002955" total="4" passed="1" failed="3" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <failure>
+                <message><![CDATA[One or more child tests had errors]]></message>
+              </failure>
+              <test-case id="1031" name="SteeringModule_NullModel_HandlesGracefully" fullname="Vehicle.Tests.Steering.SteeringModuleTests.SteeringModule_NullModel_HandlesGracefully" methodname="SteeringModule_NullModel_HandlesGracefully" classname="Vehicle.Tests.Steering.SteeringModuleTests" runstate="Runnable" seed="1252667540" result="Failed" start-time="2025-12-24 10:19:00Z" end-time="2025-12-24 10:19:00Z" duration="0.000863" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[Unhandled log message: '[Error] [SteeringModule] Steering model is null! Steering will be disabled.'. Use UnityEngine.TestTools.LogAssert.Expect]]></message>
+                  <stack-trace><![CDATA[Vehicle.Modules.SteeringModule:.ctor (Vehicle.Modules.SteeringModels.ISteeringModel) (at Assets/Scripts/Vehicle/Modules/SteeringModule.cs:23)
+Vehicle.Tests.Steering.SteeringModuleTests:SteeringModule_NullModel_HandlesGracefully () (at Assets/Tests/Editor/Vehicle/Steering/SteeringModuleTests.cs:123)
+System.Reflection.MethodBase:Invoke (object,object[])
+NUnit.Framework.Internal.Reflect:InvokeMethod (System.Reflection.MethodInfo,object,object[])
+NUnit.Framework.Internal.MethodWrapper:Invoke (object,object[])
+NUnit.Framework.Internal.Commands.TestMethodCommand:RunNonAsyncTestMethod (NUnit.Framework.Internal.ITestExecutionContext)
+NUnit.Framework.Internal.Commands.TestMethodCommand:RunTestMethod (NUnit.Framework.Internal.ITestExecutionContext)
+NUnit.Framework.Internal.Commands.TestMethodCommand:Execute (NUnit.Framework.Internal.ITestExecutionContext)
+UnityEditor.EditorApplication:Internal_CallUpdateFunctions ()
+
+]]></stack-trace>
+                </failure>
+                <output><![CDATA[[SteeringModule] Steering model is null! Steering will be disabled.
+]]></output>
+              </test-case>
+              <test-case id="1032" name="SteeringModule_NullRigidbody_HandlesGracefully" fullname="Vehicle.Tests.Steering.SteeringModuleTests.SteeringModule_NullRigidbody_HandlesGracefully" methodname="SteeringModule_NullRigidbody_HandlesGracefully" classname="Vehicle.Tests.Steering.SteeringModuleTests" runstate="Runnable" seed="1475351964" result="Failed" start-time="2025-12-24 10:19:00Z" end-time="2025-12-24 10:19:00Z" duration="0.000759" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[Unhandled log message: '[Error] [SteeringModule] Rigidbody is null! Cannot apply steering.'. Use UnityEngine.TestTools.LogAssert.Expect]]></message>
+                  <stack-trace><![CDATA[Vehicle.Modules.SteeringModule:Tick (Vehicle.Core.VehicleInput&,Vehicle.Core.VehicleState&,Vehicle.Core.VehicleContext&) (at Assets/Scripts/Vehicle/Modules/SteeringModule.cs:43)
+Vehicle.Tests.Steering.SteeringModuleTests/<>c__DisplayClass9_0:<SteeringModule_NullRigidbody_HandlesGracefully>b__0 () (at Assets/Tests/Editor/Vehicle/Steering/SteeringModuleTests.cs:168)
+NUnit.Framework.Constraints.ThrowsConstraint/VoidInvocationDescriptor:Invoke ()
+NUnit.Framework.Constraints.ThrowsConstraint/ExceptionInterceptor:Intercept (object)
+NUnit.Framework.Constraints.ThrowsNothingConstraint:ApplyTo (object)
+NUnit.Framework.Assert:That<object> (object,NUnit.Framework.Constraints.IResolveConstraint,string,object[])
+NUnit.Framework.Assert:That (NUnit.Framework.TestDelegate,NUnit.Framework.Constraints.IResolveConstraint,string,object[])
+NUnit.Framework.Assert:DoesNotThrow (NUnit.Framework.TestDelegate,string,object[])
+NUnit.Framework.Assert:DoesNotThrow (NUnit.Framework.TestDelegate)
+Vehicle.Tests.Steering.SteeringModuleTests:SteeringModule_NullRigidbody_HandlesGracefully () (at Assets/Tests/Editor/Vehicle/Steering/SteeringModuleTests.cs:166)
+System.Reflection.MethodBase:Invoke (object,object[])
+NUnit.Framework.Internal.Reflect:InvokeMethod (System.Reflection.MethodInfo,object,object[])
+NUnit.Framework.Internal.MethodWrapper:Invoke (object,object[])
+NUnit.Framework.Internal.Commands.TestMethodCommand:RunNonAsyncTestMethod (NUnit.Framework.Internal.ITestExecutionContext)
+NUnit.Framework.Internal.Commands.TestMethodCommand:RunTestMethod (NUnit.Framework.Internal.ITestExecutionContext)
+NUnit.Framework.Internal.Commands.TestMethodCommand:Execute (NUnit.Framework.Internal.ITestExecutionContext)
+UnityEditor.EditorApplication:Internal_CallUpdateFunctions ()
+
+]]></stack-trace>
+                </failure>
+                <output><![CDATA[[SteeringModule] Rigidbody is null! Cannot apply steering.
+]]></output>
+              </test-case>
+              <test-case id="1029" name="SteeringModule_PhysicsMode_AppliesTorque" fullname="Vehicle.Tests.Steering.SteeringModuleTests.SteeringModule_PhysicsMode_AppliesTorque" methodname="SteeringModule_PhysicsMode_AppliesTorque" classname="Vehicle.Tests.Steering.SteeringModuleTests" runstate="Runnable" seed="1712178998" result="Failed" start-time="2025-12-24 10:19:00Z" end-time="2025-12-24 10:19:00Z" duration="0.000287" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  Expected: not equal to 0.0f
+  But was:  0.0f
+]]></message>
+                  <stack-trace><![CDATA[at Vehicle.Tests.Steering.SteeringModuleTests.SteeringModule_PhysicsMode_AppliesTorque () [0x000ea] in C:\Game\My project\Assets\Tests\Editor\Vehicle\Steering\SteeringModuleTests.cs:78
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1030" name="SteeringModule_PhysicsMode_ZeroSteer_DoesNotApplyTorque" fullname="Vehicle.Tests.Steering.SteeringModuleTests.SteeringModule_PhysicsMode_ZeroSteer_DoesNotApplyTorque" methodname="SteeringModule_PhysicsMode_ZeroSteer_DoesNotApplyTorque" classname="Vehicle.Tests.Steering.SteeringModuleTests" runstate="Runnable" seed="203261741" result="Passed" start-time="2025-12-24 10:19:00Z" end-time="2025-12-24 10:19:00Z" duration="0.000146" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Saving results to: C:/Users/D00m/AppData/LocalLow/DefaultCompany/My project\TestResults.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

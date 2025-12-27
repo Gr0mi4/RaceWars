@@ -29,6 +29,15 @@ namespace Vehicle.Specs
         [Min(0f)]
         [Tooltip("Damper coefficient (N*s/m). Golf V: ~6000 N*s/m.")]
         public float damper = 12000f;
+        /// <summary>
+        /// Compression smoothing time constant (s).
+        /// Adds "inertia" to the suspension length measurement so it doesn't react instantly
+        /// to tiny raycast distance jitter. Higher value = smoother/less jitter, but more lag.
+        /// Typical range: 0.02–0.10 s. Start with 0.05 s.
+        /// </summary>
+        [Min(0f)]
+        [Tooltip("Suspension length smoothing (s). 0 = no smoothing. Typical: 0.02–0.10. Start: 0.05.")]
+        public float compressionSmoothingTime = 0.05f;
 
         [Header("Travel")]
         /// <summary>

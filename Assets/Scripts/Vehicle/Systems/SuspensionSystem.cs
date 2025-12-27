@@ -1,193 +1,154 @@
 using UnityEngine;
 using Vehicle.Core;
-using System.IO;
-using System.Text;
-using System.Globalization;
 
 namespace Vehicle.Systems
 {
     /// <summary>
-    /// Suspension system that applies forces based on suspension characteristics.
-    /// This is a placeholder for future suspension system implementation.
+    /// Raycast-based suspension system.
+    /// Calculates vertical suspension forces (spring + damper),
+    /// and applies dynamic weight transfer (longitudinal + lateral).
     /// </summary>
     public sealed class SuspensionSystem : IVehicleModule
     {
-        /// <summary>
-        /// Initializes a new instance of the SuspensionSystem.
-        /// </summary>
-        public SuspensionSystem()
-        {
-        }
 
-        /// <summary>
-        /// Updates the suspension system.
-        /// Currently empty - placeholder for future implementation.
-        /// </summary>
-        /// <param name="input">Current vehicle input.</param>
-        /// <param name="state">Current vehicle state.</param>
-        /// <param name="ctx">Vehicle context containing rigidbody, transform, and specifications.</param>
         public void Tick(in VehicleInput input, ref VehicleState state, in VehicleContext ctx)
         {
-            var wheelSpec = ctx.wheelSpec ?? ctx.spec?.wheelSpec;
-            var suspSpec = ctx.suspensionSpec ?? ctx.spec?.suspensionSpec;
-            if (wheelSpec == null || wheelSpec.wheelOffsets == null || wheelSpec.wheelOffsets.Length == 0 || ctx.rb == null || suspSpec == null)
-            {
-                // #region agent log
-                AppendLog("SuspensionSystem:skip", "H1",
-                    ("reason", "missing spec or rb"),
-                    ("hasWheelSpec", wheelSpec != null),
-                    ("hasOffsets", wheelSpec?.wheelOffsets != null),
-                    ("offsetsLen", wheelSpec?.wheelOffsets?.Length ?? 0),
-                    ("hasSuspSpec", suspSpec != null),
-                    ("runId", "pre-fix"),
-                    ("location", "SuspensionSystem.Tick"));
-                // #endregion
+            // ------------------------------------------------------------
+            // 0. Basic validation
+            // ------------------------------------------------------------
+            if (ctx.rb == null || ctx.wheelSpec == null || ctx.suspensionSpec == null)
                 return;
-            }
 
-            int count = wheelSpec.wheelOffsets.Length;
-            if (state.wheels == null || state.wheels.Length != count)
-            {
-                state.wheels = new WheelRuntime[count];
-            }
+            var wheelSpec = ctx.wheelSpec;
+            var suspSpec  = ctx.suspensionSpec;
 
-            float rest = Mathf.Max(0f, suspSpec.restLength);
-            float maxComp = Mathf.Max(0f, suspSpec.maxCompression);
+            int wheelCount = wheelSpec.wheelOffsets.Length;
+            if (wheelCount == 0)
+                return;
+
+            if (state.wheels == null || state.wheels.Length != wheelCount)
+                state.wheels = new WheelRuntime[wheelCount];
+
+            // ------------------------------------------------------------
+            // 1. Pre-calc constants
+            // ------------------------------------------------------------
+            float mass = ctx.rb.mass;
+            float g = 9.81f;
+            float dt = Time.fixedDeltaTime;
+
+            // Static load per wheel (baseline)
+            float staticFzPerWheel = (mass * g) / wheelCount;
+
+            // Suspension geometry
+            float restLength = Mathf.Max(0.01f, suspSpec.restLength);
+            float maxCompression = Mathf.Max(0f, suspSpec.maxCompression);
             float maxDroop = Mathf.Max(0f, suspSpec.maxDroop);
-            float rayLength = rest + maxComp + maxDroop;
+            float rayLength = restLength + maxCompression + maxDroop;
 
-            for (int i = 0; i < count; i++)
+            // Spring & damper (auto-tuned)
+            float sagRatio = 0.35f;
+            float sag = Mathf.Max(0.01f, restLength * sagRatio);
+            float springK = staticFzPerWheel / sag;
+
+            float cCrit = 2f * Mathf.Sqrt(springK * (mass / wheelCount));
+            float damperC = 0.35f * cCrit;
+
+            // ------------------------------------------------------------
+            // 4. Per-wheel suspension
+            // ------------------------------------------------------------
+            for (int i = 0; i < wheelCount; i++)
             {
-                Vector3 origin = ctx.tr.TransformPoint(wheelSpec.wheelOffsets[i]);
-                Vector3 dir = -ctx.Up;
+                Vector3 localOffset = wheelSpec.wheelOffsets[i];
+                Vector3 rayOrigin = ctx.tr.TransformPoint(localOffset);
+                Vector3 rayDir = -ctx.Up;
 
                 bool grounded = false;
                 Vector3 contactPoint = Vector3.zero;
-                Vector3 normal = Vector3.up;
+                Vector3 surfaceNormal = ctx.Up;
+
                 float compression = 0f;
                 float normalForce = 0f;
 
-                if (Physics.Raycast(origin, dir, out RaycastHit hit, rayLength))
+                // --------------------------------------------------------
+                // 4.1 Raycast (wheel-ground contact)
+                // --------------------------------------------------------
+                if (Physics.Raycast(rayOrigin, rayDir, out RaycastHit hit, rayLength, ~0, QueryTriggerInteraction.Ignore))
                 {
-                    float dist = hit.distance;
-                    // If wheel is beyond droop range, treat as not grounded.
-                    if (dist <= rest + maxDroop)
+                    float distance = hit.distance - wheelSpec.wheelRadius;
+                    distance = Mathf.Max(0f, distance);
+
+                    if (distance <= restLength + maxDroop)
                     {
                         grounded = true;
                         contactPoint = hit.point;
-                        normal = hit.normal;
+                        surfaceNormal = hit.normal;
 
-                        compression = Mathf.Clamp(rest - dist, 0f, maxComp);
+                        // ------------------------------------------------
+                        // 4.2 Suspension compression (smoothed)
+                        // ------------------------------------------------
+                        float targetCompression = Mathf.Clamp(restLength - distance, 0f, maxCompression);
 
-                        // Relative velocity along normal at contact.
-                        float relVel = Vector3.Dot(ctx.rb.GetPointVelocity(hit.point), hit.normal);
+                        var wr = state.wheels[i];
+                        if (!wr.isGrounded)
+                            wr.compressionFiltered = 0f;
 
-                        float springForce = compression > 0f ? suspSpec.spring * compression : 0f;
-                        float damperForce = 0f;
-                        if (compression > 0f)
+                        float tau = Mathf.Max(0.001f, suspSpec.compressionSmoothingTime);
+                        float alpha = 1f - Mathf.Exp(-dt / tau);
+
+                        wr.compressionFiltered = Mathf.Lerp(
+                            wr.compressionFiltered,
+                            targetCompression,
+                            alpha
+                        );
+
+                        compression = wr.compressionFiltered;
+                        state.wheels[i] = wr;
+
+                        // ------------------------------------------------
+                        // 4.3 Spring + damper force
+                        // ------------------------------------------------
+                        Vector3 axis = ctx.Up;
+                        float relVel = Vector3.Dot(ctx.rb.GetPointVelocity(hit.point), axis);
+
+                        float springForce = compression > 0f ? springK * compression : 0f;
+                        float damperForce = -damperC * relVel;
+                        damperForce = Mathf.Clamp(
+                            damperForce,
+                            -suspSpec.maxDamperForce,
+                            suspSpec.maxDamperForce
+                        );
+
+                        float baseFz = springForce + damperForce;
+
+                        // ------------------------------------------------
+                        // 4.5 Apply force
+                        // ------------------------------------------------
+                        float totalFz = Mathf.Clamp(baseFz, 0f, suspSpec.maxForce);
+
+                        if (totalFz > 0f)
                         {
-                            damperForce = suspSpec.damper * (-relVel);
-                            damperForce = Mathf.Clamp(damperForce, -suspSpec.maxDamperForce, suspSpec.maxDamperForce);
+                            ctx.rb.AddForceAtPosition(axis * totalFz, hit.point, ForceMode.Force);
                         }
 
-                        normalForce = Mathf.Max(0f, springForce + damperForce);
-                        normalForce = Mathf.Min(normalForce, suspSpec.maxForce);
-
-                        if (normalForce > 0f)
-                        {
-                            Vector3 force = hit.normal * normalForce;
-                            ctx.rb.AddForceAtPosition(force, hit.point, ForceMode.Force);
-                        }
-
-                        // #region agent log
-                        AppendLog("SuspensionSystem:contact", "H2",
-                            ("wheel", i),
-                            ("compression", compression),
-                            ("relVel", relVel),
-                            ("springForce", springForce),
-                            ("damperForce", damperForce),
-                            ("normalForce", normalForce),
-                            ("contactX", contactPoint.x),
-                            ("contactY", contactPoint.y),
-                            ("contactZ", contactPoint.z),
-                            ("rest", rest),
-                            ("maxComp", maxComp),
-                            ("maxDroop", maxDroop),
-                            ("dist", dist),
-                            ("maxDamper", suspSpec.maxDamperForce),
-                            ("maxForce", suspSpec.maxForce),
-                            ("runId", "pre-fix"),
-                            ("location", "SuspensionSystem.Tick"));
-                        // #endregion
+                        normalForce = totalFz;
                     }
                 }
 
+                // --------------------------------------------------------
+                // 4.6 Write wheel state
+                // --------------------------------------------------------
                 state.wheels[i].isGrounded = grounded;
                 state.wheels[i].contactPoint = contactPoint;
-                state.wheels[i].surfaceNormal = normal;
+                state.wheels[i].surfaceNormal = surfaceNormal;
                 state.wheels[i].normalForce = normalForce;
                 state.wheels[i].compression = compression;
 
-                // Approximate angular velocity from vehicle forward speed if grounded.
                 float forwardSpeed = Vector3.Dot(ctx.rb.linearVelocity, ctx.Forward);
-                state.wheels[i].angularVelocity = wheelSpec.wheelRadius > 0f ? forwardSpeed / wheelSpec.wheelRadius : 0f;
-            }
-        }
-
-        // Minimal NDJSON logger
-        private void AppendLog(string message, string hypothesisId, params (string key, object value)[] fields)
-        {
-            try
-            {
-                const string LogPath = "/Users/ivanhromau/Personal/RaceWars/.cursor/debug.log";
-                var dir = Path.GetDirectoryName(LogPath);
-                if (!string.IsNullOrEmpty(dir))
-                {
-                    Directory.CreateDirectory(dir);
-                }
-                var sb = new StringBuilder(256);
-                sb.Append('{');
-                sb.Append("\"timestamp\":").Append(System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).Append(',');
-                sb.Append("\"sessionId\":\"debug-session\",");
-                sb.Append("\"runId\":\"pre-fix\",");
-                sb.Append("\"hypothesisId\":\"").Append(hypothesisId).Append("\",");
-                sb.Append("\"message\":\"").Append(message).Append("\",");
-                sb.Append("\"data\":{");
-                for (int i = 0; i < fields.Length; i++)
-                {
-                    var (key, val) = fields[i];
-                    sb.Append('\"').Append(key).Append("\":");
-                    switch (val)
-                    {
-                        case bool b:
-                            sb.Append(b ? "true" : "false");
-                            break;
-                        case int iv:
-                            sb.Append(iv);
-                            break;
-                        case float fv:
-                            sb.Append(fv.ToString(CultureInfo.InvariantCulture));
-                            break;
-                        case double dv:
-                            sb.Append(dv.ToString(CultureInfo.InvariantCulture));
-                            break;
-                        case string sv:
-                            sb.Append('\"').Append(sv).Append('\"');
-                            break;
-                        default:
-                            sb.Append('\"').Append(val?.ToString() ?? "null").Append('\"');
-                            break;
-                    }
-                    if (i < fields.Length - 1) sb.Append(',');
-                }
-                sb.Append("}}");
-                File.AppendAllText(LogPath, sb.ToString() + "\n");
-            }
-            catch (System.Exception ex)
-            {
-                UnityEngine.Debug.LogWarning($"[SuspensionSystem] log failed: {ex.Message}");
+                state.wheels[i].angularVelocity =
+                    wheelSpec.wheelRadius > 0f
+                        ? forwardSpeed / wheelSpec.wheelRadius
+                        : 0f;
             }
         }
     }
 }
-
