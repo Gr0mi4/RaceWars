@@ -30,6 +30,8 @@ namespace Vehicle.UI.Telemetry
             float normalLoadTotal = 0f;
             float normalLoadFront = 0f;
             float normalLoadRear = 0f;
+            // NOTE: rolling resistance was previously estimated from WheelSpec.rollingResistance (Crr).
+            // That parameter has been removed from WheelSpec for now (unused by actual physics).
             float rollingResistance = 0f;
 
             // Calculate drag force
@@ -60,8 +62,7 @@ namespace Vehicle.UI.Telemetry
                     if (i < 2) normalLoadFront += n;
                     else normalLoadRear += n;
 
-                    float crr = ctx.wheelSpec != null ? ctx.wheelSpec.rollingResistance : 0f;
-                    rollingResistance += crr * n;
+                    // rollingResistance += crr * n; (disabled: no Crr parameter)
                 }
             }
 

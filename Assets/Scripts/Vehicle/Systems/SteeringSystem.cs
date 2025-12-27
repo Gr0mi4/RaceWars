@@ -117,7 +117,7 @@ namespace Vehicle.Systems
             if (state.wheels == null || state.wheels.Length != count)
                 state.wheels = new WheelRuntime[count];
         }
-        private int[] _frontWheelIndices = new int[] { 0, 2 };
+        private int[] _frontWheelIndices = Vehicle.Core.WheelIndex.Front;
 
         private void WriteWheelForwardDirections(ref VehicleState state, in VehicleContext ctx, float steerAngleDeg)
         {

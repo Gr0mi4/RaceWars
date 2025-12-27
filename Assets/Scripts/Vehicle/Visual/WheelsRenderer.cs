@@ -1,20 +1,23 @@
 // WheelsRenderer.cs
-// цель: максимально понятный дебаг "колёсной физики" (тяга/тормоз/сцепление/моменты) в Gizmos.
+// Goal: highly readable wheel physics debug visualization in Gizmos (traction / braking / grip / moments).
 //
-// ВАЖНО ПРО ИНДЕКСЫ (твоя актуальная конвенция):
-//   FRONT wheels: 0 and 2
-//   REAR  wheels: 1 and 3
+// WheelIndex convention (IMPORTANT):
+// - 0 = FL, 1 = RL, 2 = FR, 3 = RR
+// - Front axle: 0 & 2, Rear axle: 1 & 3
 //
-// Этот рендерер НЕ трогает гизмосы подвески (mount/raycast/contact/Fz) — они остаются как у тебя.
-// Мы добавляем/структурируем гизмосы именно для:
-//  1) Ускоряющих/тормозящих моментов (torque) на колесе
-//  2) Применённых сил сцепления (Fx/Fy) + desired до клипа
-//  3) Фрикционного лимита mu*Fz и "utilization"
-//  4) Вкладов каждого колеса в yaw-момент вокруг COM (очень полезно для “почему рулится странно?”)
+// This renderer does NOT change suspension gizmos (mount/raycast/contact/Fz) logic.
+// It adds structured gizmos for:
+// 1) Per-wheel drive/brake torque visualization
+// 2) Applied tire forces (Fx/Fy) + "desired" (pre-clamp) forces
+// 3) Friction budget (mu*Fz) and utilization
+// 4) Per-wheel yaw moment contribution around COM
 
 using UnityEngine;
 using Vehicle.Core;
 using Vehicle.Specs;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public class WheelsRenderer : MonoBehaviour
 {
@@ -62,14 +65,63 @@ public class WheelsRenderer : MonoBehaviour
     [Tooltip("Show per-wheel yaw moment contribution around COM.")]
     [SerializeField] private bool drawYawMoments = true;
 
+    [Header("Debug / Gizmos: toggles")]
+    [Tooltip("Draw suspension/contact helpers (mount point, ray, contact point, normal).")]
+    [SerializeField] private bool drawSuspensionAndContacts = true;
+
+    [Tooltip("Draw wheel local axes at the contact patch (fwd/right).")]
+    [SerializeField] private bool drawWheelAxes = true;
+
+    [Tooltip("Draw drive/brake torque arcs at the contact patch.")]
+    [SerializeField] private bool drawTorqueArcs = true;
+
+    [Tooltip("Draw applied tire forces (Fx and Fy) after friction clamp.")]
+    [SerializeField] private bool drawAppliedForces = true;
+
+    [Tooltip("Draw numeric label at the contact patch (Fx/Fy/Fz/muFz/util/alpha/kappa/vLong/vLat).")]
+    [SerializeField] private bool drawContactLabels = true;
+
+    [Tooltip("Draw tire-model debug extras (slip angle arrow, vLong/vLat vectors, zero-lateral indicator, velocity direction, raw-vs-final marker).")]
+    [SerializeField] private bool drawTireModelDebug = true;
+
     private readonly RaycastHit[] _hits = new RaycastHit[4];
     private readonly bool[] _grounded = new bool[4];
 
     private float RayLengthResolved => (suspensionSpec != null) ? suspensionSpec.restLength : fallbackRayLength;
     private float WheelRadiusResolved => (wheelSpec != null) ? wheelSpec.wheelRadius : fallbackWheelRadius;
 
-    // Palette so “если несколько колёс — разными цветами”
-    // Мы используем базовый цвет на колесо, а затем оттеняем под тип гизмоса (тяга/тормоз/боковая).
+#if UNITY_EDITOR
+    private static GUIStyle _contactLabelStyle;
+    private static Texture2D _contactLabelBg;
+
+    private static GUIStyle GetContactLabelStyle()
+    {
+        if (_contactLabelStyle != null)
+            return _contactLabelStyle;
+
+        if (_contactLabelBg == null)
+        {
+            _contactLabelBg = new Texture2D(2, 2);
+            _contactLabelBg.hideFlags = HideFlags.HideAndDontSave;
+            var col = new Color(0, 0, 0, 0.7f);
+            _contactLabelBg.SetPixels(new[] { col, col, col, col });
+            _contactLabelBg.Apply();
+        }
+
+        _contactLabelStyle = new GUIStyle
+        {
+            fontSize = 11,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter
+        };
+        _contactLabelStyle.normal.textColor = Color.white;
+        _contactLabelStyle.normal.background = _contactLabelBg;
+        return _contactLabelStyle;
+    }
+#endif
+
+    // Per-wheel color palette (helps when multiple wheels are visualized at once).
+    // We take a base color per wheel and tint it for different gizmo types.
     private static readonly Color[] WheelColors =
     {
         new Color(0.90f, 0.25f, 0.25f, 1f), // wheel 0
@@ -136,36 +188,47 @@ public class WheelsRenderer : MonoBehaviour
             Vector3 dir = -transform.up;
             float castDist = rayLength + wheelRadius;
 
-            // ---------------------------
-            //  A) Подвеска/контакты (НЕ трогаем, как просил)
-            // ---------------------------
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawSphere(mountWorld, 0.04f);
-
-            Gizmos.color = Color.white;
-            Gizmos.DrawLine(mountWorld, mountWorld + dir * castDist);
-
-            Gizmos.color = new Color(1f, 0.5f, 0f, 1f);
-            Vector3 approxWheelCenter = mountWorld + dir * rayLength + transform.up * wheelRadius;
-            Gizmos.DrawWireSphere(approxWheelCenter, 0.05f);
-
-            bool grounded = (_grounded != null && _grounded.Length > i && _grounded[i]);
+            // Don't depend on LateUpdate state: raycast here so gizmos work in edit mode too.
+            bool grounded = Physics.Raycast(
+                mountWorld,
+                dir,
+                out RaycastHit hit,
+                castDist,
+                groundMask,
+                QueryTriggerInteraction.Ignore
+            );
 
             if (!grounded)
                 continue;
 
-            // contact point + normal from raycast (_hits)
-            Vector3 contact = _hits[i].point;
-            Vector3 normal = _hits[i].normal.normalized;
+            // contact point + normal from raycast
+            Vector3 contact = hit.point;
+            Vector3 normal = hit.normal.normalized;
 
-            Gizmos.color = Color.green;
-            Gizmos.DrawSphere(contact, 0.05f);
+            if (drawSuspensionAndContacts)
+            {
+                // ---------------------------
+                //  A) Suspension / contacts helpers
+                // ---------------------------
+                Gizmos.color = Color.yellow;
+                Gizmos.DrawSphere(mountWorld, 0.04f);
 
-            Gizmos.color = Color.cyan;
-            Gizmos.DrawLine(contact, contact + normal * 0.25f);
+                Gizmos.color = Color.white;
+                Gizmos.DrawLine(mountWorld, mountWorld + dir * castDist);
+
+                Gizmos.color = new Color(1f, 0.5f, 0f, 1f);
+                Vector3 approxWheelCenter = mountWorld + dir * rayLength + transform.up * wheelRadius;
+                Gizmos.DrawWireSphere(approxWheelCenter, 0.05f);
+
+                Gizmos.color = Color.green;
+                Gizmos.DrawSphere(contact, 0.05f);
+
+                Gizmos.color = Color.cyan;
+                Gizmos.DrawLine(contact, contact + normal * 0.25f);
+            }
 
             // ---------------------------
-            //  B) Если нет физики колеса — дальше рисовать нечего
+            //  B) If there is no wheel runtime physics data, stop here
             // ---------------------------
             if (controller == null || controller.State.wheels == null || controller.State.wheels.Length <= i)
                 continue;
@@ -173,10 +236,10 @@ public class WheelsRenderer : MonoBehaviour
             var wr = controller.State.wheels[i];
 
             // ---------------------------
-            //  C) Вспомогательные оси колеса (для понимания "куда смотрит колесо")
+            //  C) Wheel axes helpers (where the wheel "points")
             // ---------------------------
-            // wheelForwardWorld задаётся SteeringSystem (или fallback в TireForcesSystem -> ctx.Forward).
-            // На этой оси считается Fx (продольная сила).
+            // wheelForwardWorld is set by SteeringSystem (or falls back to body forward).
+            // Fx is applied along this axis.
             Vector3 fwd = wr.wheelForwardWorld.sqrMagnitude > 1e-6f ? wr.wheelForwardWorld.normalized : transform.forward;
             fwd = Vector3.ProjectOnPlane(fwd, normal);
             if (fwd.sqrMagnitude < 1e-6f) fwd = Vector3.ProjectOnPlane(transform.forward, normal);
@@ -186,49 +249,47 @@ public class WheelsRenderer : MonoBehaviour
             if (right.sqrMagnitude < 1e-6f) right = transform.right;
             right.Normalize();
 
-            // Маленькие оси в контакте:
-            //  - белая: fwd (куда колесо "катится")
-            //  - серая: right (боковая ось колеса)
-            Gizmos.color = Color.white;
-            Gizmos.DrawLine(contact, contact + fwd * 0.25f);
+            if (drawWheelAxes)
+            {
+                // Small axes at the contact point:
+                // - white: fwd (rolling direction)
+                // - grey : right (wheel lateral axis)
+                Gizmos.color = Color.white;
+                Gizmos.DrawLine(contact, contact + fwd * 0.25f);
 
-            Gizmos.color = new Color(0.8f, 0.8f, 0.8f, 1f);
-            Gizmos.DrawLine(contact, contact + right * 0.20f);
+                Gizmos.color = new Color(0.8f, 0.8f, 0.8f, 1f);
+                Gizmos.DrawLine(contact, contact + right * 0.20f);
+            }
 
             // ---------------------------
-            //  E) 1) УСКОРЯЮЩИЕ / ТОРМОЗЯЩИЕ МОМЕНТЫ (TORQUE)
+            //  E) 1) DRIVE / BRAKE TORQUE (Nm)
             // ---------------------------
-            // ВАЖНО: torque — это не force. Это момент вокруг оси вращения колеса.
-            // Мы рисуем его "дугой" в плоскости вращения колеса.
+            // Important: torque is not force. It's a moment around the wheel spin axis.
+            // We draw it as an arc in the wheel plane.
             //
-            // - driveTorque: может быть + (разгон) или - (как торможение/drag из drivetrain)
-            // - brakeTorque: всегда >=0 (запрос тормоза), но фактическое направление зависит от wheelOmega/vLong
-            //
-            // Чтобы видеть "что именно тормозит":
-            //  - Разгоняющий момент: driveTorque, если он толкает колесо "вперёд по fwd".
-            //  - Тормозящий момент: brakeTorque (по оценке направления) + отрицательный driveTorque.
+            // - driveTorque: can be + (drive) or - (engine braking / drag)
+            // - brakeTorque: >= 0 request, sign depends on wheelOmega/vLong
             float wheelR = Mathf.Max(0.01f, (controller.State.wheelRadius > 0.01f ? controller.State.wheelRadius : WheelRadiusResolved));
 
-            // Ось вращения колеса (примерно) = right
+            // Approx wheel spin axis = right
             Vector3 spinAxis = right;
 
             // 1) drive torque arc
-            if (Mathf.Abs(wr.driveTorque) > 1e-3f)
+            if (drawTorqueArcs && Mathf.Abs(wr.driveTorque) > 1e-3f)
             {
-                // Цвет: “на колесо” + тип:
-                //   - если wr.driveTorque положительный => разгон (яркий зелёный оттенок)
-                //   - если отрицательный => тормозит/drag (яркий красный оттенок)
+                // Color tint:
+                // - positive driveTorque => acceleration (green-ish)
+                // - negative driveTorque => braking/drag (red-ish)
                 Color baseC = WheelColors[i];
                 Color c = wr.driveTorque >= 0f
                     ? Color.Lerp(baseC, new Color(0.1f, 1.0f, 0.1f, 1f), 0.55f)
                     : Color.Lerp(baseC, new Color(1.0f, 0.1f, 0.1f, 1f), 0.55f);
 
-                // Длина/интенсивность дуги = |torque| * torqueScale (ограничим, чтобы не улетало)
+                // Arc intensity = |torque| * torqueScale (clamped for readability)
                 float arcAmount = Mathf.Clamp01(Mathf.Abs(wr.driveTorque) * torqueScale);
 
-                // Направление дуги:
-                // для визуализации считаем, что +torque пытается увеличить wheelOmega в сторону "вперёд".
-                // Поэтому знак дуги завяжем на (driveTorque sign) и текущий wheelOmega, чтобы было “ощущение” направления.
+                // Arc direction:
+                // For visualization we assume +torque tries to increase wheelOmega in the "forward" direction.
                 float torqueSign = Mathf.Sign(wr.driveTorque);
 
                 DrawTorqueArc(
@@ -244,22 +305,22 @@ public class WheelsRenderer : MonoBehaviour
                 );
             }
 
-            // 2) brake torque arc (оценка направления как в TireForcesSystem)
-            if (wr.brakeTorque > 1e-3f)
+            // 2) brake torque arc (direction estimation matches TireForcesSystem)
+            if (drawTorqueArcs && wr.brakeTorque > 1e-3f)
             {
-                // Определим “в какую сторону” тормоз противодействует:
-                // - если колесо уже крутится => тормоз противоположен wheelOmega
-                // - иначе если машина движется по vLong => тормоз противоположен vLong
+                // Determine which direction the brake opposes:
+                // - if wheel is spinning => opposite to wheelOmega
+                // - else if moving => opposite to vLong
                 float brakeOpposesSign = 0f;
                 if (Mathf.Abs(wr.wheelOmega) > 0.5f) brakeOpposesSign = Mathf.Sign(wr.wheelOmega);
                 else if (Mathf.Abs(wr.debugVLong) > 0.1f) brakeOpposesSign = Mathf.Sign(wr.debugVLong);
                 else brakeOpposesSign = 1f; // fallback
 
-                // тормозящий момент “против” направления вращения => дуга будет противоположного знака
+                // Braking torque is "against" rotation => draw arc with opposite sign
                 float torqueSign = -brakeOpposesSign;
 
                 Color baseC = WheelColors[i];
-                Color c = Color.Lerp(baseC, new Color(1.0f, 0.55f, 0.05f, 1f), 0.65f); // оранжевый: тормоз
+                Color c = Color.Lerp(baseC, new Color(1.0f, 0.55f, 0.05f, 1f), 0.65f); // orange: braking
                 float arcAmount = Mathf.Clamp01(wr.brakeTorque * torqueScale);
 
                 DrawTorqueArc(
@@ -276,39 +337,36 @@ public class WheelsRenderer : MonoBehaviour
             }
 
             // ---------------------------
-            //  F) 2) СИЛЫ СЦЕПЛЕНИЯ (Fx/Fy) — применённые (после friction circle clamp)
+            //  F) 2) TIRE FORCES (Fx/Fy) — applied (after friction circle clamp)
             // ---------------------------
-            // wr.debugLongForce / wr.debugLatForce в твоём TireForcesSystem = уже применённые силы (после clamp).
-            //
-            // Это самое важное для понимания поведения:
-            // - Fx (magenta) = тяга/торможение в плоскости дороги
-            // - Fy (red)     = боковая сила удержания траектории
-            //
-            // Если Fy слишком огромная на скорости => “по рельсам” (то, что ты видишь на FWD).
-            // Если Fy слишком маленькая на передней оси => “не рулится”.
+            // wr.debugLongForce / wr.debugLatForce are the applied forces.
+            // - Fx (magenta): drive/brake in the road plane
+            // - Fy (red)    : lateral force (turning)
             Vector3 fxApplied = wr.debugLongForce;
             Vector3 fyApplied = wr.debugLatForce;
 
-            if (fxApplied.sqrMagnitude > 1e-6f)
+            if (drawAppliedForces)
             {
-                // magenta: applied Fx
-                Gizmos.color = new Color(1f, 0f, 1f, 1f);
-                DrawArrow(contact, fxApplied * forceScale);
-            }
+                if (fxApplied.sqrMagnitude > 1e-6f)
+                {
+                    // magenta: applied Fx
+                    Gizmos.color = new Color(1f, 0f, 1f, 1f);
+                    DrawArrow(contact, fxApplied * forceScale);
+                }
 
-            if (fyApplied.sqrMagnitude > 1e-6f)
-            {
-                // red: applied Fy
-                Gizmos.color = new Color(1f, 0.1f, 0.1f, 1f);
-                DrawArrow(contact, fyApplied * forceScale);
+                if (fyApplied.sqrMagnitude > 1e-6f)
+                {
+                    // red: applied Fy
+                    Gizmos.color = new Color(1f, 0.1f, 0.1f, 1f);
+                    DrawArrow(contact, fyApplied * forceScale);
+                }
             }
 
             // ---------------------------
-            //  G) Desired forces (до клипа)
+            //  G) Desired forces (pre-clamp)
             // ---------------------------
-            // wr.debugFxDesired / wr.debugFyDesired — у тебя это скаляры “до friction circle”.
-            // Чтобы визуально понять “упираемся ли в сцепление”:
-            // - если desired сильно больше applied => мы в клипе, и это и есть “снос/букс/блок”
+            // Use this to see whether we are limited by grip:
+            // - if desired >> applied => we are clamped by the friction circle
             if (drawDesiredForces)
             {
                 // Semi-transparent: desired
@@ -328,28 +386,28 @@ public class WheelsRenderer : MonoBehaviour
             }
 
             // ---------------------------
-            //  H) 3) Фрикционный бюджет mu*Fz и utilization
+            //  H) 3) Friction budget (mu*Fz) and utilization
             // ---------------------------
-            // wr.debugMuFz = mu*Fz (максимальный модуль результирующей силы в плоскости)
-            // wr.debugUtil = (|desired| / muFz) примерно (у тебя так посчитано)
+            // wr.debugMuFz = mu*Fz (max available resultant force magnitude in the contact plane)
+            // wr.debugUtil = utilization (how close we are to the limit)
             if (drawFrictionBudget && wr.debugMuFz > 1e-3f)
             {
-                // Рисуем “кольцо лимита”: радиус пропорционален muFz * forceScale.
-                // Чем больше радиус — тем больше доступный grip.
+                // Draw a "limit ring": radius is proportional to muFz * forceScale.
+                // Bigger ring => more available grip.
                 float r = Mathf.Clamp(wr.debugMuFz * forceScale, 0.05f, 1.5f);
 
-                // Цвет: голубой лимит
+                // Cyan: friction limit ring
                 Gizmos.color = new Color(0.2f, 0.9f, 1.0f, 0.75f);
                 DrawRing(contact, normal, r, 18);
 
-                // Utilization: маленький маркер на кольце
-                // util ~ 1 => “на грани”
+                // Utilization: marker on the ring
+                // util ~ 1 => at the limit
                 float util = Mathf.Clamp01(wr.debugUtil);
                 Gizmos.color = util < 0.85f
-                    ? new Color(0.2f, 1.0f, 0.2f, 0.9f)   // зелёный: запас
-                    : new Color(1.0f, 0.2f, 0.2f, 0.9f); // красный: упёрлись
+                    ? new Color(0.2f, 1.0f, 0.2f, 0.9f)   // green: margin
+                    : new Color(1.0f, 0.2f, 0.2f, 0.9f); // red: saturated
 
-                // Маркер: просто точка на окружности по направлению applied force
+                // Marker: a dot in the direction of the applied force in the contact plane
                 Vector3 fPlane = fxApplied + fyApplied;
                 Vector3 dirPlane = fPlane.sqrMagnitude > 1e-6f ? fPlane.normalized : fwd;
                 dirPlane = Vector3.ProjectOnPlane(dirPlane, normal).normalized;
@@ -359,14 +417,16 @@ public class WheelsRenderer : MonoBehaviour
             }
 
             // ---------------------------
-            //  I) 4) Yaw moment around COM (почему “переруливает/недоруливает”)
+            //  H.1) 3D numeric labels at the contact patch (always for grounded wheels)
             // ---------------------------
-            // Момент вокруг вертикальной оси (Y) = (r x F).y,
-            // где r — вектор от COM к точке контакта, F — сила в контакте.
-            //
-            // ВАЖНО: это даёт “картину” поворота:
-            // - большие моменты с задней оси на RWD => склонность к oversteer
-            // - если перед почти не даёт момента => “не рулится”
+            if (drawContactLabels)
+                DrawContactPatchLabels(contact, normal, wr, fxApplied, fyApplied, i);
+
+            // ---------------------------
+            //  I) 4) Yaw moment around COM (why it over/under-steers)
+            // ---------------------------
+            // Yaw moment around Y axis = (r x F).y,
+            // where r is COM->contact vector, F is contact force.
             if (drawYawMoments && rb != null)
             {
                 Vector3 com = rb.worldCenterOfMass;
@@ -375,16 +435,92 @@ public class WheelsRenderer : MonoBehaviour
                 Vector3 fTotal = fxApplied + fyApplied;
                 if (fTotal.sqrMagnitude > 1e-4f)
                 {
-                    float yaw = Vector3.Cross(rVec, fTotal).y; // N*m (примерно)
+                    float yaw = Vector3.Cross(rVec, fTotal).y; // N*m (approx)
                     float len = Mathf.Clamp(yaw * yawMomentScale, -1.5f, 1.5f);
 
-                    // Цвет: индивидуальный на колесо, чтобы видеть кто даёт вклад
+                    // Per-wheel color to see who contributes
                     Gizmos.color = new Color(WheelColors[i].r, WheelColors[i].g, WheelColors[i].b, 0.9f);
 
-                    // Рисуем вертикальную стрелку у COM:
-                    // вверх = yaw положительный, вниз = отрицательный
-                    Vector3 start = com + Vector3.up * 0.15f + (Vector3.right * (0.05f * (i - 1.5f))); // немного разнести, чтобы не совпадали
+                    // Draw a vertical arrow near COM:
+                    // up = positive yaw, down = negative
+                    Vector3 start = com + Vector3.up * 0.15f + (Vector3.right * (0.05f * (i - 1.5f))); // small separation so arrows don't overlap
                     DrawArrow(start, Vector3.up * len);
+                }
+            }
+
+            if (drawTireModelDebug)
+            {
+                // ---------------------------
+                //  J) TIRE MODEL v2 DEBUG: Slip angle, velocities, zero-lateral flag
+                // ---------------------------
+                // Visualize key tire-model parameters for debugging handling issues
+
+                // 1) Slip angle (α) - slip direction
+                // Angle between wheel direction and motion direction
+                float alphaRad = wr.debugSlipAngleRad;
+                if (Mathf.Abs(alphaRad) > 0.001f)
+                {
+                    // Approx slip direction from alpha sign
+                    Vector3 slipDirection = right * Mathf.Sign(alphaRad);
+                    float slipMagnitude = Mathf.Abs(alphaRad) * 0.3f; // visualization scale
+
+                    // Yellow arrow: slip direction
+                    Gizmos.color = new Color(1f, 1f, 0f, 0.8f);
+                    DrawArrow(contact, slipDirection * slipMagnitude);
+                }
+
+                // 2) Velocity components (vLong, vLat) in wheel coordinates
+                float vLong = wr.debugVLong;
+                float vLat = wr.debugVLat;
+
+                // Green arrow: longitudinal speed (vLong)
+                if (Mathf.Abs(vLong) > 0.01f)
+                {
+                    Gizmos.color = new Color(0f, 1f, 0f, 0.6f);
+                    Vector3 vLongVec = fwd * vLong * 0.1f; // scale: 1 m/s => 0.1 m
+                    DrawArrow(contact, vLongVec);
+                }
+
+                // Blue arrow: lateral speed (vLat)
+                if (Mathf.Abs(vLat) > 0.01f)
+                {
+                    Gizmos.color = new Color(0f, 0.5f, 1f, 0.6f);
+                    Vector3 vLatVec = right * vLat * 0.1f; // scale: 1 m/s => 0.1 m
+                    DrawArrow(contact, vLatVec);
+                }
+
+                // 3) ShouldZeroLateral flag indicator
+                // Red ring = lateral forces are being forced to zero
+                if (wr.debugShouldZeroLateral)
+                {
+                    Gizmos.color = new Color(1f, 0f, 0f, 0.7f);
+                    Gizmos.DrawWireSphere(contact + normal * 0.1f, 0.08f);
+                }
+
+                // 4) Wheel forward vs actual velocity direction
+                // Shows difference between wheel direction and actual motion direction
+                Vector3 actualVelocity = controller.GetComponent<Rigidbody>().GetPointVelocity(contact);
+                Vector3 actualVelocityPlane = Vector3.ProjectOnPlane(actualVelocity, normal);
+                if (actualVelocityPlane.sqrMagnitude > 0.01f)
+                {
+                    actualVelocityPlane.Normalize();
+                    // Orange arrow: actual motion direction
+                    Gizmos.color = new Color(1f, 0.5f, 0f, 0.5f);
+                    DrawArrow(contact, actualVelocityPlane * 0.2f);
+                }
+
+                // 5) Raw vs final forces marker (useful when build-up/filtering is added)
+                float fxRaw = wr.debugFxRaw;
+                float fyRaw = wr.debugFyRaw;
+                float fxFinal = wr.debugFxFinal;
+                float fyFinal = wr.debugFyFinal;
+
+                float fxDiff = Mathf.Abs(fxRaw - fxFinal);
+                float fyDiff = Mathf.Abs(fyRaw - fyFinal);
+                if (fxDiff > 10f || fyDiff > 10f)
+                {
+                    Gizmos.color = new Color(0.8f, 0f, 0.8f, 0.8f);
+                    Gizmos.DrawSphere(contact + normal * 0.15f, 0.04f);
                 }
             }
         }
@@ -497,9 +633,9 @@ public class WheelsRenderer : MonoBehaviour
     /// - amount01: 0..1 how large arc is
     /// - sign: +1 / -1 direction
     ///
-    /// Интерпретация:
-    /// - Положительный момент (sign=+1) — “крутит колесо вперёд”
-    /// - Отрицательный — “тормозит/тащит назад”
+    /// Interpretation:
+    /// - Positive torque (sign=+1) tries to spin the wheel forward
+    /// - Negative torque tries to brake / pull it backward
     /// </summary>
     private static void DrawTorqueArc(
         Vector3 center,
@@ -567,4 +703,64 @@ public class WheelsRenderer : MonoBehaviour
             DrawArrow(endPrev, tangent * 0.12f);
         }
     }
+
+    /// <summary>
+    /// Draws numeric 3D labels near the contact patch.
+    /// Shows key parameters: Fx, Fy, Fz, mu*Fz, utilization, slip angle, slip ratio.
+    /// </summary>
+    private void DrawContactPatchLabels(
+        Vector3 contact,
+        Vector3 normal,
+        Vehicle.Core.WheelRuntime wr,
+        Vector3 fxApplied,
+        Vector3 fyApplied,
+        int wheelIndex
+    )
+    {
+#if UNITY_EDITOR
+        // Label position: slightly above the contact patch
+        Vector3 labelPosition = contact + normal * 0.15f;
+
+        // Build the label string with key values
+        float fx = fxApplied.magnitude;
+        float fy = fyApplied.magnitude;
+        float fz = wr.normalForce;
+        float muFz = wr.debugMuFz;
+        float util = wr.debugUtil;
+        float alphaDeg = wr.debugSlipAngleRad * Mathf.Rad2Deg;
+        float kappa = wr.debugSlipRatio;
+        float vLong = wr.debugVLong;
+        float vLat = wr.debugVLat;
+
+        // Validate values (NaN / Infinity)
+        if (float.IsNaN(fx) || float.IsInfinity(fx)) fx = 0f;
+        if (float.IsNaN(fy) || float.IsInfinity(fy)) fy = 0f;
+        if (float.IsNaN(fz) || float.IsInfinity(fz)) fz = 0f;
+        if (float.IsNaN(muFz) || float.IsInfinity(muFz)) muFz = 0f;
+        if (float.IsNaN(util) || float.IsInfinity(util)) util = 0f;
+        if (float.IsNaN(alphaDeg) || float.IsInfinity(alphaDeg)) alphaDeg = 0f;
+        if (float.IsNaN(kappa) || float.IsInfinity(kappa)) kappa = 0f;
+        if (float.IsNaN(vLong) || float.IsInfinity(vLong)) vLong = 0f;
+        if (float.IsNaN(vLat) || float.IsInfinity(vLat)) vLat = 0f;
+
+        // Format values for display
+        string labelText = $"Wheel {GetWheelName(wheelIndex)}\n" +
+                          $"Fx: {fx:F0}N  Fy: {fy:F0}N  Fz: {fz:F0}N\n" +
+                          $"μFz: {muFz:F0}N  Util: {util:F2}\n" +
+                          $"α: {alphaDeg:F1}°  κ: {kappa:F3}\n" +
+                          $"vLong: {vLong:F2}m/s  vLat: {vLat:F2}m/s";
+
+        Handles.Label(labelPosition, labelText, GetContactLabelStyle());
+#endif
+    }
+
+    /// <summary>
+    /// Returns display name for a wheel (FL, RL, FR, RR).
+    /// WheelIndex convention: 0=FL,1=RL,2=FR,3=RR (front=0/2, rear=1/3)
+    /// </summary>
+    private string GetWheelName(int wheelIndex)
+    {
+        return WheelIndex.Name4(wheelIndex);
+    }
+
 }

@@ -1,0 +1,466 @@
+RaceWars — PLAN: развитие vehicle-physics до “приятного simcade” (GTA IV / Driver / NFS PU/UG уровень)
+Дата: 2025-12-27
+
+================================================================================
+SESSION NOTES (THIS ITERATION)
+================================================================================
+Done:
+- Wheel indices: fixed and centralized WheelIndex convention (0=FL,1=RL,2=FR,3=RR; front=0/2, rear=1/3).
+  Updated Drivetrain/Brakes/Steering/Telemetry/Gizmos accordingly.
+- WheelSpec: aligned tooltip + default offsets order to the WheelIndex convention and fixed the default WheelSpec asset.
+- TireForcesSystem: removed the broken "ZERO LATERAL" kill-switch that disabled Fy at speed; car now steers correctly on FWD/RWD/AWD.
+- TireForcesSystem cleanup: removed disk logging + dead code; kept current tire model v2 (alpha/kappa + combined slip).
+- WheelsRenderer cleanup: cached label GUIStyle/background texture; made OnDrawGizmos raycast independent of LateUpdate.
+- Code comments: switched key edited files to English (TireForcesSystem, WheelsRenderer).
+
+Postponed (intentionally):
+- Build-up / relaxation filter for Fx/Fy ("tire force build-up"). We will discuss and add later if needed.
+
+Notes:
+- The original uncontrollable drift / no-steer symptom was very likely caused by wheel index mismatch + the ZERO LATERAL hack.
+
+================================================================================
+0) ЦЕЛЬ И КРИТЕРИИ ГОТОВНОСТИ
+================================================================================
+Цель: не “идеальная симуляция”, а набор управляемых механизмов, чтобы тюнингом
+быстро получать характер поведения (understeer/oversteer, вес/инерция, grip/drift)
+без переписывания архитектуры.
+
+Definition of Done (минимум для качественного тюнинга):
+- На любом типе привода (FWD/RWD/AWD) поворот руля вызывает предсказуемый turn-in
+  на низкой скорости и контролируемый снос на лимите.
+- Есть ручки баланса осей (front/rear) и combined slip (тяга ↔ боковой).
+- Есть измеряемые метрики (α/κ/Fx/Fy/Fz/utilization/yawMoment) и быстрый рантайм-тюнинг.
+
+
+================================================================================
+1) ОСНОВА: ЧТО У НАС УЖЕ ЕСТЬ (и это сохраняем)
+================================================================================
+Pipeline и причинность:
+- Подвеска даёт Fz на колесо и применяет вертикальную силу в contactPoint.
+- Шины применяют суммарную силу (Fx+Fy) в contactPoint через AddForceAtPosition.
+- Есть общий friction budget μFz и friction circle clamp.
+
+Почему это важно:
+- Это уже “правильная” структура для simcade. Улучшения будут добавлять сущности,
+  но не ломать архитектуру.
+
+
+================================================================================
+2) ПЛАН ПО СИСТЕМАМ (от простых к сложным)
+================================================================================
+Примечание по приоритетам:
+- P0: быстрые доработки с максимальным эффектом на ощущение/контроль
+- P1: ядро управляемости (без этого GTA/Driver-feel не получить)
+- P2: расширения simcade (устойчивость, характер, “вкус”)
+- P3: окружение/поверхности/высокие скорости
+- P4: инструментарий тюнинга (без него настройка будет мучением)
+
+
+--------------------------------------------------------------------------------
+P0. Сквозные основы: соглашения, данные, порядок модулей в pipeline
+--------------------------------------------------------------------------------
+Соглашения (важно для корректности всех следующих пунктов):
+- Единый wheel index convention (Front/Rear/Left/Right) должен быть зафиксирован в одном месте
+  и использоваться одинаково в Steering/Drivetrain/Suspension/AntiRoll/Brakes/Telemetry.
+  (Сейчас в коде встречается “Front: 0&2 / Rear: 1&3” как рабочее правило.)
+
+Поток данных (кто владеет чем):
+- SuspensionSystem владеет контактом: isGrounded/contactPoint/surfaceNormal/Fz/compression (+ surface info).
+- SteeringSystem владеет направлением колёс: wheelForwardWorld (и, при необходимости, wheelRightWorld).
+- Drivetrain/Braking/TCS/ABS владеют моментами: driveTorque/brakeTorque (и их модификациями).
+- TireForcesSystem владеет шиной: α/κ → Fx/Fy (raw/final), combined slip, build-up, wheelOmega update.
+
+Порядок модулей (к чему стремимся по мере добавлений):
+- WheelSystem (radius) →
+  SuspensionSystem (контакт, Fz) →
+  (SurfaceSystem) →
+  (AntiRollSystem) →
+  SteeringSystem (wheelForwardWorld) →
+  DrivetrainSystem (driveTorque) →
+  (TCSSystem) →
+  BrakingSystem (brakeTorque) →
+  (ABSSystem) →
+  TireForcesSystem (Fx/Fy) →
+  AerodragSystem / DownforceSystem →
+  TelemetrySystem.
+
+
+--------------------------------------------------------------------------------
+P0. VehicleController / Rigidbody: применить инерцию кузова (ощущение “массы”)
+--------------------------------------------------------------------------------
+Текущее состояние в коде:
+- Применяется mass и centerOfMass из ChassisSpec.
+- inertiaX/Y/Z в ChassisSpec существуют, но в Rigidbody НЕ применяются.
+
+Что меняем (простое → сложное):
+1) Применить inertia tensor из ChassisSpec в ApplyRigidbodyDefaults().
+2) (опц.) Проверить/зафиксировать оси inertiaTensorRotation (если будет нужно).
+
+Зачем:
+- inertiaY (yaw) — ключевая ручка “тяжести”/инертности поворота как в GTA IV.
+- Без неё даже хорошая модель шин будет ощущаться слишком “лёгкой/нереальной”.
+
+Где:
+- VehicleController.ApplyRigidbodyDefaults()
+
+Параметры:
+- ChassisSpec.inertiaX / inertiaY / inertiaZ (уже есть).
+
+
+--------------------------------------------------------------------------------
+P0. SteeringSystem: оставить как есть, но подготовить “окно” для low-speed assist
+--------------------------------------------------------------------------------
+Текущее состояние:
+- Есть speed-sensitive steering scale.
+- Есть yaw assist (bicycle-model controller), но он выключен константой.
+
+Что меняем:
+1) Ничего не ломаем: steering остаётся “задаёт направление колёс”.
+2) Подготовить включение yaw assist “окном” по скорости (ниже ~1–4 м/с),
+   но только после ввода slip angle (чтобы assist был вторичным).
+
+Зачем:
+- Low-speed поведение в simcade почти всегда требует небольшой поддержки.
+- Но assist должен быть “страховкой”, а не главным источником yaw.
+
+Где:
+- SteeringSystem (EnableYawAssist → параметр/флаг в SteeringSpec).
+
+Параметры (добавить в SteeringSpec при необходимости):
+- enableYawAssist, yawAssistMinSpeed, yawAssistMaxSpeed, yawAssistMaxTorqueScale.
+
+
+--------------------------------------------------------------------------------
+P1. TireForcesSystem: перейти от “Fy = -vLat * damping” к simcade tire model (α/κ)
+--------------------------------------------------------------------------------
+Текущее состояние:
+- Fx: от slipSpeed = (wheelOmega*R - vLong) и линейная жёсткость, затем clamp кругом.
+- Fy: демпфер от vLat (не зависит от поворота колеса напрямую).
+- Силы прикладываются правильно: AddForceAtPosition(contactPoint).
+
+Главная цель:
+- Шина должна иметь две независимые причины силы:
+  - α (slip angle) → Fy
+  - κ (slip ratio / normalized slipSpeed) → Fx
+  - combined slip ограничивает сумму.
+
+ПОШАГОВЫЙ TODO-ПЛАН ИМПЛЕМЕНТАЦИИ (с привязкой к текущему коду)
+
+Важно про номера строк:
+- Номера ниже привязаны к текущему состоянию репозитория на момент написания плана.
+- После внесения правок строки сдвинутся — это нормально; на шаге имплементации
+  ориентируемся на “блоки/комментарии” и близлежащие строки, а не на абсолют.
+
+Файлы/модули, которые точно трогаем:
+- `Assets/Scripts/Vehicle/Systems/TireForcesSystem.cs`
+- `Assets/Scripts/Vehicle/Core/VehicleState.cs` (struct `WheelRuntime`)
+- (опционально на следующем круге тюнинга) `Assets/Scripts/Vehicle/Specs/WheelSpec.cs`
+
+TODO 1 — Подготовить состояние и дебаг-поля в WheelRuntime (минимум для α/κ + build-up)
+- [ ] **Добавить новые поля в `WheelRuntime`** (`Assets/Scripts/Vehicle/Core/VehicleState.cs`, блок `WheelRuntime`, примерно строки L73–L100):
+  - **Зачем**: без хранения прошлых значений невозможно сделать build-up/relaxation; без α/κ не отладить модель.
+  - **Что добавить** (минимальный набор):
+    - `public float fxPrev;` (состояние фильтра Fx)
+    - `public float fyPrev;` (состояние фильтра Fy)
+    - `public float debugSlipAngleRad;`
+    - `public float debugSlipRatio;` (или debugSlipSpeed, но κ удобнее для ABS/TCS)
+    - `public float debugFxRaw; public float debugFyRaw;`
+    - `public float debugFxFinal; public float debugFyFinal;`
+  - **Куда вставить**: рядом с уже существующими debug полями (L88–L99), а fxPrev/fyPrev — рядом с `wheelOmega` (L85) или внизу как state.
+
+TODO 2 — Вынести/добавить “тюнинг-ручки” в TireForcesSystem как константы v2 (пока без Specs)
+- [ ] **Добавить константы модели шин v2** в `TireForcesSystem` (`Assets/Scripts/Vehicle/Systems/TireForcesSystem.cs`), рядом с существующими константами (примерно L17–L32):
+  - **Зачем**: чтобы быстро начать тюнинг без изменения ScriptableObject-спеков.
+  - **Что добавить** (стартовые значения, потом подберём):
+    - `VRefAlpha = 1.0f;` (0.5..2.0) — защита α на low speed
+    - `VRefKappa = 2.0f;` (1..3) — защита κ на low speed
+    - `MuLatScaleFront/MuLatScaleRear` (по умолчанию 1.0) — быстрый баланс осей
+    - `MuLongScaleFront/MuLongScaleRear` (по умолчанию 1.0)
+    - `CxFront/CxRear` (пример 10/10)
+    - `CyFront/CyRear` (пример 8/8)
+    - `LatDamp = 0.0f` (начать с 0; потом небольшой)
+    - `TauLong = 0.08f`, `TauLat = 0.12f` (build-up)
+
+TODO 3 — Исправить расчёт vLong/vLat: брать скорость в плоскости контакта
+- [ ] **Заменить расчёт vLong/vLat** в `TireForcesSystem` в блоке “Contact patch velocity”
+  (`Assets/Scripts/Vehicle/Systems/TireForcesSystem.cs`, примерно строки L87–L91):
+  - **Почему**: на наклонной поверхности вертикальная составляющая скорости попадает в “шину” и создаёт паразитные силы/знаки.
+  - **Что сделать**:
+    - добавить `vPlane = Vector3.ProjectOnPlane(v, n);`
+    - считать `vLong/vLat` от `vPlane`, а не от `v`.
+
+TODO 4 — Добавить вычисление α и κ (slip angle / slip ratio) + записать в debug
+- [ ] **Сразу после vLong/vLat** (после L90–L91) добавить:
+  - `alpha = atan2(vLat, max(VRefAlpha, abs(vLong)))`
+  - `wheelSurface = wheelOmega * radius`
+  - `kappa = (wheelSurface - vLong) / max(VRefKappa, abs(vLong))`
+  - запись в `w.debugSlipAngleRad` / `w.debugSlipRatio`
+  - **Почему**: α — причина Fy от руля; κ — причина Fx от тяги/тормоза и основа ABS/TCS.
+
+TODO 5 — Заменить FxDesired/FyDesired на “сырые” Fx0/Fy0 от κ/α (tanh saturation)
+- [ ] **Заменить блоки**:
+  - “2) Longitudinal slip -> Fx demand” (примерно L118–L129)
+  - “3) Lateral force (your damping model)” (примерно L130–L136)
+  на новую схему:
+  - **Почему**: текущий Fy=-vLat*damping не создаёт поворот от руля; Fx по slipSpeed без нормировки сложнее тюнить и использовать для ассистов.
+  - **Что сделать**:
+    - определить `isFront` (по индексу; текущая конвенция в проекте встречается как Front: 0&2)
+    - `muLong = wheelSpec.friction * muLongScale(front/rear)`
+    - `muLat  = wheelSpec.friction * muLatScale(front/rear)`
+    - `Fx0 = (muLong * fz) * tanh(Cx(front/rear) * kappa)`
+    - `FyAlpha = (muLat * fz) * tanh(Cy(front/rear) * alpha)`
+    - `FyDamp = -vLat * LatDamp` (малый стабилизатор; на первом проходе можно 0)
+    - `Fy0 = FyAlpha + FyDamp`
+    - записать `w.debugFxRaw = Fx0; w.debugFyRaw = Fy0;`
+
+TODO 6 — Заменить friction circle clamp на combined slip по нормализованным компонентам (ellipse)
+- [ ] **Заменить блок “4) Friction circle clamp (Fx + Fy)”** (примерно L137–L149):
+  - **Почему**: combined-slip в нормализованном виде даёт стабильный “тяга съедает поворот” и позволяет раздельные μLong/μLat.
+  - **Что сделать**:
+    - `FxMax = muLong * fz`, `FyMax = muLat * fz`
+    - `ux = Fx0/FxMax`, `uy = Fy0/FyMax`
+    - если `sqrt(ux^2+uy^2) > 1` → делим Fx0/Fy0 на этот коэффициент
+    - получить `FxFinal/FyFinal`
+    - записать `w.debugFxFinal/FyFinal` (до build-up или после — договоримся в реализации)
+
+TODO 7 — Добавить build-up/relaxation (фильтр 1-го порядка) на Fx/Fy
+- [ ] **После combined-slip и перед Apply forces** (перед формированием `fLong/fLatV`, примерно перед L154):
+  - **Почему**: без build-up силы меняются мгновенно → “нервный” и не-GTA/Driver feel.
+  - **Что сделать**:
+    - `aLong = 1-exp(-dt/TauLong)`, `aLat = 1-exp(-dt/TauLat)`
+    - `w.fxPrev = lerp(w.fxPrev, FxFinal, aLong)`
+    - `w.fyPrev = lerp(w.fyPrev, FyFinal, aLat)`
+    - использовать `Fx = w.fxPrev`, `Fy = w.fyPrev` для сил и wheelOmega update
+
+TODO 8 — Обновить debug/utilization и wheelOmega update под новую схему
+- [ ] **Debug** (`Assets/Scripts/Vehicle/Systems/TireForcesSystem.cs`, блок “Debug outputs”, примерно L174–L191):
+  - **Почему**: текущие debugFxDesired/debugFyDesired будут отражать старую модель.
+  - **Что сделать**:
+    - `debugFxDesired/debugFyDesired` переопределить как “raw” или “final” (явно в комментарии)
+    - `debugUtil` считать от нормализованных Fx/Fy:
+      - `util = sqrt((Fx/FxMax)^2 + (Fy/FyMax)^2)`
+
+- [ ] **wheelOmega update** (блок “6) Update wheelOmega…”, примерно L160–L173):
+  - **Почему**: groundTq должен использовать Fx, который реально применили (после combined+build-up).
+  - **Что сделать**:
+    - `groundTq = Fx * radius` (где Fx уже финальный)
+
+TODO 9 — (Опционально) вынести параметры из констант в Specs после того, как модель заработает
+- [ ] **Добавить параметры в `WheelSpec`** (`Assets/Scripts/Vehicle/Specs/WheelSpec.cs`) только после первичного тюнинга:
+  - **Почему**: сначала проще тюнить константами; потом — оформить в SO.
+  - **Что переносим**:
+    - Cx/Cy front/rear (или biasFront)
+    - muLong/muLat scales front/rear
+    - tauLong/tauLat, VRefAlpha/VRefKappa, LatDamp
+
+Ожидаемый результат после TODO 1–8:
+- RWD начнёт “рулиться” на малой скорости (Fy появляется от α, а α появляется от поворота колеса).
+- FWD перестанет быть “идеальным”: combined slip и правильный Fy(α) добавят understeer/снос под газом.
+  (Дальше это доводится балансом front/rear μ и Cx/Cy.)
+
+Зачем (прямое соответствие “ощущениям игр”):
+- α даёт turn-in и естественный understeer/oversteer.
+- κ даёт прогнозируемый traction/braking на лимите.
+- Combined slip даёт “тяга съедает поворот” как в GTA/NFS.
+- Relaxation даёт “массу” и убирает нервные мгновенные реакции.
+
+Где:
+- TireForcesSystem (весь расчёт сосредоточить здесь; архитектуру не трогаем).
+
+Данные/параметры (минимальный набор, лучше вынести из const в Spec):
+- WheelSpec или новый TireSpec (рекомендуется, чтобы не перегружать WheelSpec):
+  - muLatFront, muLatRear (или общий muLat + biasFront)
+  - muLongFront, muLongRear (или общий muLong + biasFront)
+  - CxFront/CxRear, CyFront/CyRear
+  - tauLongFront/tauLongRear, tauLatFront/tauLatRear
+  - vRefAlpha, vRefKappa (low-speed стабилизация)
+  - latDamp (малый)
+
+Данные для дебага (в WheelRuntime):
+- alphaRad, kappa, vLong, vLat
+- Fx0,Fy0 и Fx,Fy (после combined + build-up)
+- utilization, yawMomentContribution (опц.)
+
+
+--------------------------------------------------------------------------------
+P1. SuspensionSystem: расширить как “система поведения” (anti-roll + surface info)
+--------------------------------------------------------------------------------
+Текущее состояние:
+- Raycast suspension, spring/damper, smoothing compression.
+- Пишет в WheelRuntime: grounded/contactPoint/surfaceNormal/normalForce/compression.
+
+Что меняем (простое → сложное):
+1) Anti-roll bar (front/rear):
+   - по парам колёс (Front: 0&2, Rear: 1&3) брать diff compression
+   - добавлять вертикальные силы +/- по нормали (через AddForceAtPosition в contactPoint)
+2) (опц.) Записывать информацию о поверхности (surfaceId / muScale) для шин:
+   - либо сохранить ссылку/тип (layer/material) в WheelRuntime
+   - либо сохранить заранее рассчитанные множители (muScale/latScale/longScale)
+
+Зачем:
+- Anti-roll — “ручка” устойчивости и читабельного поведения в повороте.
+- Surface model — важен для “живого” мира (асфальт/гравий/трава) без усложнения шин.
+
+Где:
+- Лучше отдельный модуль AntiRollSystem после SuspensionSystem (чистая архитектура),
+  но можно и прямо в SuspensionSystem как P0/P1 быстрый шаг.
+
+Параметры:
+- SuspensionSpec: antiRollFront, antiRollRear (добавить).
+
+
+--------------------------------------------------------------------------------
+P2. DrivetrainSystem: дифференциал/LSD как “вкус” выхода из поворота
+--------------------------------------------------------------------------------
+Текущее состояние:
+- Раздаёт одинаковый torque на ведущие колёса (делит по groundedDriven).
+- Нет модели диффа/локера.
+
+Что меняем (простое → сложное):
+1) “Псевдо-LSD” coupling по оси ведущих колёс:
+   - omegaDiff = omegaL - omegaR
+   - Tcouple = clamp(omegaDiff * lsdStrength, -lsdMax, +lsdMax)
+   - apply: left += -Tcouple, right += +Tcouple
+2) Поддержать типы дифференциала:
+   - Open: без coupling
+   - LSD: coupling как выше
+   - Locked: сильный coupling (или принудительное выравнивание ω)
+3) (опц.) AWD torque split (front/rear) как параметр.
+
+Зачем:
+- Без диффа машины ощущаются “стерильными” на газу в повороте.
+- LSD — один из главных источников “характера” в simcade.
+
+Где:
+- DrivetrainSystem, после вычисления базового perWheel torque.
+
+Параметры:
+- DrivetrainSpec: differentialType, lsdStrength, lsdMaxTorque, (опц.) awdSplitFront.
+
+
+--------------------------------------------------------------------------------
+P2. BrakingSystem: brake bias + ABS (простая, но критичная “игровая” стабильность)
+--------------------------------------------------------------------------------
+Текущее состояние:
+- Одинаковый brakeTorque на все колёса; handbrake на задние.
+- ABS нет, bias нет.
+
+Что меняем (простое → сложное):
+1) Добавить BrakeSpec и brakeBiasFront:
+   - front wheels: brake * biasFront
+   - rear wheels:  brake * (1-biasFront)
+2) ABS:
+   - детект блокировки по κ (из TireForcesSystem / WheelRuntime)
+   - если κ < -kLock и тормоз активен → снижать brakeTorque (мягко, с фильтром)
+
+Зачем:
+- В GTA/NFS игрок часто “держит тормоз”, а машина остаётся управляемой.
+- Bias — ключ к поведению understeer при торможении.
+
+Где:
+- BrakingSystem (распределение) + ABS как отдельный модуль (или в BrakingSystem),
+  который читает slip из WheelRuntime.
+
+Параметры:
+- Новый BrakeSpec: maxBrakeTorque, brakeBiasFront, absEnabled, absKLock, absReleaseRate.
+
+
+--------------------------------------------------------------------------------
+P2. Traction Control (TCS): убрать “on/off” разгон на лимите
+--------------------------------------------------------------------------------
+Текущее состояние:
+- TCS нет.
+
+Что меняем:
+1) TCS по κ:
+   - если throttle и κ > kSpin → снижать driveTorque (мягко)
+2) (опц.) Разделить по осям/по колёсам.
+
+Зачем:
+- Для приятной “аркадно-сим” динамики нужен контроль пробуксовки без резких срывов.
+
+Где:
+- Как отдельный модуль между DrivetrainSystem и TireForcesSystem (идеально),
+  чтобы уменьшать w.driveTorque перед вычислением Fx.
+
+Параметры:
+- TcsSpec: enabled, kSpin, strength, responseTime.
+
+
+--------------------------------------------------------------------------------
+P3. Aerodynamics: downforce (уже есть параметры в ChassisSpec)
+--------------------------------------------------------------------------------
+Текущее состояние:
+- AerodragSystem реализован (Cd*A*v^2).
+- Downforce коэффициент и centerOfPressure есть в ChassisSpec, но силы нет.
+
+Что меняем:
+1) Добавить DownforceSystem:
+   - Fdown = 0.5 * rho * Cl * A * v^2
+   - ApplyForceAtPosition(-Up * Fdown, CoP)
+
+Зачем:
+- Для NFS PU/UG‑ощущения и стабильности на скорости нужен “скоростной grip”.
+
+Где:
+- Новый модуль после TireForcesSystem (или рядом с AerodragSystem).
+
+Параметры:
+- ChassisSpec.downforceCoefficient, centerOfPressure (уже есть), (опц.) downforceArea.
+
+
+--------------------------------------------------------------------------------
+P3. Surface Model: материалы/типы поверхности как множители (μ, stiffness, RR)
+--------------------------------------------------------------------------------
+Текущее состояние:
+- WheelSpec содержит dry/wet коэффициенты, rollingResistance, но система поверхностей не подключена.
+
+Что меняем:
+1) Ввести SurfacePreset (ScriptableObject) + маппинг Layer/PhysicMaterial → preset.
+2) Считать muScale/latScale/longScale/rrScale на контакт и передавать в TireForcesSystem.
+
+Зачем:
+- Это “дешёвый реализм” и огромный вклад в удовольствие (разные покрытия ощущаются).
+
+Где:
+- Либо в SuspensionSystem (там RaycastHit доступен),
+  либо выделить отдельный SurfaceSystem, который читает RaycastHit из WheelRuntime.
+
+
+--------------------------------------------------------------------------------
+P4. Telemetry / Debug UI / Gizmos: сделать тюнинг быстрым и прозрачным
+--------------------------------------------------------------------------------
+Текущее состояние:
+- Есть TelemetrySystem и разные модули, есть gizmos в WheelsRenderer.
+- Но нет ключевых тюнинг‑метрик шины (α/κ) и момента рыскания по вкладам.
+
+Что меняем (простое → сложное):
+1) В WheelRuntime добавить поля для α/κ/vLong/vLat/Fx/Fy (raw/final) и utilization.
+2) В Telemetry:
+   - вывод per-wheel α/κ/Fx/Fy/Fz/util
+   - суммарный yaw moment Σ(r×F)_y и осевые суммы FyFront/FyRear
+3) В Gizmos:
+   - подписывать α/κ у пятна контакта (опционально, можно в UI)
+   - рисовать отдельными цветами Fx и Fy после combined/build-up
+4) Debug UI “ползунки” для ключевых параметров (в рантайме):
+   - Cx/Cy front/rear
+   - muLat/muLong
+   - tauLat/tauLong
+   - antiRollFront/Rear
+   - brakeBiasFront, ABS/TCS thresholds
+   - LSD strength/max
+
+Зачем:
+- Без этого вы не сможете “как в GTA/Driver/NFS” быстро довести характер —
+  будет бесконечный цикл “поменял — непонятно почему стало так”.
+
+
+================================================================================
+3) КРАТКОЕ ОБОСНОВАНИЕ СИМПТОМОВ (оставлено как контекст)
+================================================================================
+- RWD плохо рулится на low-speed, потому что Fy в текущей модели ≈ демпфер от vLat,
+  а не функция α (угла проскальзывания).
+- FWD рулится слишком “идеально”, потому что Fx прикладывается вдоль wheelForwardWorld,
+  давая боковую составляющую силы без необходимости развить α/снос.
+

@@ -37,12 +37,12 @@ namespace Vehicle.Systems
                     state.wheels[i].brakeTorque += tq;
             }
 
-            // Handbrake: rear only (1,3)
+            // Handbrake: rear only (1,3) => WheelIndex.RearLeft / WheelIndex.RearRight
             if (hand01 > Epsilon && state.wheels.Length >= 4)
             {
                 float tq = (HandbrakeTorquePerKg * mass) * hand01;
-                state.wheels[1].brakeTorque += tq;
-                state.wheels[3].brakeTorque += tq;
+                state.wheels[Vehicle.Core.WheelIndex.RearLeft].brakeTorque += tq;
+                state.wheels[Vehicle.Core.WheelIndex.RearRight].brakeTorque += tq;
             }
         }
     }

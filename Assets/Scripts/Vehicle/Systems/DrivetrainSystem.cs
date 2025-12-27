@@ -12,8 +12,8 @@ namespace Vehicle.Systems
     /// - Writes per-wheel driveTorque (does NOT apply forces)
     ///
     /// Wheel index convention (ВАЖНО):
-    /// Front wheels: 0 and 2
-    /// Rear wheels : 1 and 3
+    /// 0=FL, 1=RL, 2=FR, 3=RR
+    /// Front axle: 0,2. Rear axle: 1,3.
     /// </summary>
     public sealed class DrivetrainSystem : IVehicleModule
     {
@@ -191,14 +191,14 @@ namespace Vehicle.Systems
             if (wheelCount < 4)
                 return new[] { 0 };
 
-            // Your rule:
+            // WheelIndex convention:
             // Front: 0,2
             // Rear : 1,3
             return driveType switch
             {
-                DrivetrainSpec.DriveType.RWD => new[] { 1, 3 },
+                DrivetrainSpec.DriveType.RWD => WheelIndex.Rear,
                 DrivetrainSpec.DriveType.AWD => new[] { 0, 1, 2, 3 },
-                _ => new[] { 0, 2 }, // FWD
+                _ => WheelIndex.Front, // FWD
             };
         }
     }

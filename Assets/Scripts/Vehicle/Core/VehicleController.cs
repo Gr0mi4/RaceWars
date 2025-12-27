@@ -157,13 +157,11 @@ namespace Vehicle.Core
         {
             var modules = new List<IVehicleModule>();
 
-            // 1. Wheel System - stores wheel radius and applies lateral grip
+            // 1. Wheel System - stores wheel radius (single source of truth for other systems)
             if (carSpec?.wheelSpec != null)
             {
                 modules.Add(new WheelSystem(
-                    carSpec.wheelSpec.wheelRadius,
-                    carSpec.wheelSpec.sideGrip,
-                    carSpec.wheelSpec.handbrakeGripMultiplier
+                    carSpec.wheelSpec.wheelRadius
                 ));
             }
 

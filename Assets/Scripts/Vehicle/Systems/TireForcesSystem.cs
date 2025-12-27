@@ -5,10 +5,9 @@ using Vehicle.Specs;
 namespace Vehicle.Systems
 {
     /// <summary>
-    /// TireForcesSystem (with longitudinal slip):
-    /// - Longitudinal force Fx comes from slip speed: (wheelOmega*R - vLong)
-    /// - Lateral force Fy is damping-style from vLat (as before)
-    /// - Full friction circle clamp: sqrt(Fx^2 + Fy^2) <= mu * Fz
+    /// TireForcesSystem (tire model v2):
+    /// - Computes Fx from slip ratio κ, Fy from slip angle α
+    /// - Combined slip clamp (normalized utilization)
     /// - Applies forces at contact patch (AddForceAtPosition)
     /// - Updates wheelOmega from applied torques and ground reaction torque
     /// </summary>
@@ -21,14 +20,84 @@ namespace Vehicle.Systems
         private const float WheelOmegaDamping = 0.5f;   // 1/s
         private const float MinSpeedForSign = 0.1f;     // m/s
 
-        // --- NEW: longitudinal slip stiffness (tuning knob) ---
-        // Converts slipSpeed (m/s) into force demand (N).
-        // We scale by Fz to get "load sensitivity" in a simple way.
-        // Typical workable range: 10..60.
-        private const float LongSlipStiffness = 25f; // 1/(m/s)
-
-        // Optional: small rolling resistance torque (stabilizes “infinite coast” feel)
+        // Optional: small rolling resistance torque (stabilizes "infinite coast" feel)
         private const float RollingResistanceTorque = 2.0f; // Nm (per wheel)
+
+        // ========================================================================
+        // TIRE MODEL v2: Slip angle (α) / Slip ratio (κ) + Combined slip
+        // ========================================================================
+
+        // Low-speed protection for slip calculations (prevents division by zero / infinite α/κ)
+        /// <summary>
+        /// Reference speed for slip angle calculation (m/s). Prevents α from exploding at very low vLong.
+        /// Typical range: 0.5..2.0. Lower = more sensitive at low speed, but risk of noise.
+        /// </summary>
+        private const float VRefAlpha = 1.0f; // m/s
+
+        /// <summary>
+        /// Reference speed for slip ratio calculation (m/s). Prevents κ from exploding at very low vLong.
+        /// Typical range: 1.0..3.0. Should be ≥ VRefAlpha.
+        /// </summary>
+        private const float VRefKappa = 2.0f; // m/s
+
+        // Friction coefficient scales (front/rear balance - key tuning knob for understeer/oversteer)
+        /// <summary>
+        /// Lateral friction scale for front wheels. 1.0 = same as base μ.
+        /// Lower front = more understeer. Higher front = more oversteer.
+        /// </summary>
+        private const float MuLatScaleFront = 1.0f;
+
+        /// <summary>
+        /// Lateral friction scale for rear wheels. 1.0 = same as base μ.
+        /// </summary>
+        private const float MuLatScaleRear = 1.0f;
+
+        /// <summary>
+        /// Longitudinal friction scale for front wheels. Usually 1.0 (same as base μ).
+        /// </summary>
+        private const float MuLongScaleFront = 1.0f;
+
+        /// <summary>
+        /// Longitudinal friction scale for rear wheels. Usually 1.0 (same as base μ).
+        /// </summary>
+        private const float MuLongScaleRear = 1.0f;
+
+        // Tire stiffness coefficients (how "responsive" the tire is to slip)
+        /// <summary>
+        /// Longitudinal stiffness coefficient for front wheels (dimensionless tuning factor).
+        /// Higher = more responsive to slip ratio κ, steeper Fx(κ) curve.
+        /// Typical range: 6..20. Start with 10.
+        /// </summary>
+        private const float CxFront = 10f;
+
+        /// <summary>
+        /// Longitudinal stiffness coefficient for rear wheels.
+        /// </summary>
+        private const float CxRear = 10f;
+
+        /// <summary>
+        /// Lateral stiffness coefficient for front wheels (dimensionless tuning factor).
+        /// Higher = more responsive to slip angle α, steeper Fy(α) curve.
+        /// Typical range: 4..15. Start with 8.
+        /// </summary>
+        private const float CyFront = 8f;
+
+        /// <summary>
+        /// Lateral stiffness coefficient for rear wheels.
+        /// </summary>
+        private const float CyRear = 8f;
+
+        // Lateral damping (small stabilizer - optional, start with 0)
+        /// <summary>
+        /// Lateral velocity damping coefficient (kg/s). Small stabilizer to prevent oscillations.
+        /// Start with 0.0. If needed, typical range: 0..(mass * 0.5).
+        /// Too high = "on rails" feel, kills slip angle response.
+        /// </summary>
+        private const float LatDamp = 0.0f; // kg/s
+
+        // Minimum speed threshold for slip calculations (dead zone)
+        // Below this speed, ignore slip angle/ratio to prevent force accumulation at standstill
+        private const float MinSpeedForSlip = 0.5f; // m/s (increased to prevent drift at low speeds)
 
         public void Tick(in VehicleInput input, ref VehicleState state, in VehicleContext ctx)
         {
@@ -40,15 +109,6 @@ namespace Vehicle.Systems
 
             float radius = state.wheelRadius > 0.01f ? state.wheelRadius : wheelSpec.wheelRadius;
             radius = Mathf.Max(0.01f, radius);
-
-            // Lateral damping (your previous approach)
-            float baseGrip = Mathf.Max(0f, wheelSpec.sideGrip);
-            float grip = baseGrip;
-            if (input.handbrake > 0.5f)
-                grip *= Mathf.Clamp01(wheelSpec.handbrakeGripMultiplier);
-
-            float mass = Mathf.Max(1f, ctx.rb.mass);
-            float latStiffness = mass * grip; // kg/s
 
             // Reset debug
             for (int i = 0; i < state.wheels.Length; i++)
@@ -64,6 +124,20 @@ namespace Vehicle.Systems
                 state.wheels[i].debugFyDesired = 0f;
                 state.wheels[i].debugMuFz = 0f;
                 state.wheels[i].debugVLong = 0f;
+
+                // Initialize build-up state: reset to zero if not grounded OR if forces are uninitialized
+                // This prevents force accumulation from uninitialized memory and force "jump" when wheel touches ground
+                if (!state.wheels[i].isGrounded)
+                {
+                    state.wheels[i].fxPrev = 0f;
+                    state.wheels[i].fyPrev = 0f;
+                }
+                // Also initialize on first frame (if values are NaN or uninitialized)
+                else if (float.IsNaN(state.wheels[i].fxPrev) || float.IsNaN(state.wheels[i].fyPrev))
+                {
+                    state.wheels[i].fxPrev = 0f;
+                    state.wheels[i].fyPrev = 0f;
+                }
             }
 
             for (int i = 0; i < state.wheels.Length; i++)
@@ -84,10 +158,48 @@ namespace Vehicle.Systems
                 if (right.sqrMagnitude < Epsilon) continue;
                 right.Normalize();
 
-                // Contact patch velocity
+                // Contact patch velocity (projected onto contact plane to remove vertical component)
                 Vector3 v = ctx.rb.GetPointVelocity(w.contactPoint);
-                float vLong = Vector3.Dot(v, fwd);
-                float vLat = Vector3.Dot(v, right);
+                Vector3 vPlane = Vector3.ProjectOnPlane(v, n); // Project onto contact plane
+                float vLong = Vector3.Dot(vPlane, fwd);
+                float vLat = Vector3.Dot(vPlane, right);
+
+                // -----------------------------
+                // Slip angle (α) and slip ratio (κ) calculation
+                // -----------------------------
+                float vLongAbs = Mathf.Abs(vLong);
+                float alphaRad;
+                float kappa;
+
+                // Dead zone: ignore lateral slip (α) at very low speeds to prevent force accumulation
+                // BUT allow longitudinal slip (κ) for starting/acceleration
+                // This prevents the car from "drifting" when stationary, but allows it to start moving
+                float wheelSurfaceSpeed = w.wheelOmega * radius; // m/s (signed)
+
+                if (vLongAbs < MinSpeedForSlip)
+                {
+                    // At standstill or very low speed, ignore lateral slip (α)
+                    alphaRad = 0f;
+                    // BUT still calculate κ for starting/acceleration
+                    // When vLong ≈ 0 but wheelOmega > 0, we need κ to generate Fx for starting
+                    kappa = (wheelSurfaceSpeed - vLong) / Mathf.Max(VRefKappa, Mathf.Max(0.1f, vLongAbs));
+                }
+                else
+                {
+                    // Normal slip calculations
+                    // Slip angle: angle between wheel forward direction and velocity direction
+                    // Positive = wheel pointing left of velocity (right-hand turn)
+                    alphaRad = Mathf.Atan2(vLat, Mathf.Max(VRefAlpha, vLongAbs));
+
+                    // Slip ratio: normalized difference between wheel surface speed and ground speed
+                    // Positive = wheel spinning faster (acceleration slip)
+                    // Negative = wheel slower than ground (braking slip/blocking)
+                    kappa = (wheelSurfaceSpeed - vLong) / Mathf.Max(VRefKappa, vLongAbs);
+                }
+
+                // Store in debug for telemetry/visualization
+                w.debugSlipAngleRad = alphaRad;
+                w.debugSlipRatio = kappa;
 
                 // Normal load and friction budget
                 float fz = Mathf.Max(0f, w.normalForce);
@@ -107,7 +219,7 @@ namespace Vehicle.Systems
 
                 float brakeApplied = brakeTq * brakeSign;
 
-                // Rolling resistance opposes rotation (small стабилизатор)
+                // Rolling resistance opposes rotation (small stabilizer)
                 float rrSign = (Mathf.Abs(w.wheelOmega) > 0.5f) ? Mathf.Sign(w.wheelOmega)
                               : (Mathf.Abs(vLong) > MinSpeedForSign ? Mathf.Sign(vLong) : 0f);
                 float rollingTq = RollingResistanceTorque * rrSign;
@@ -116,40 +228,63 @@ namespace Vehicle.Systems
                 float netTq = driveTq - brakeApplied - rollingTq;
 
                 // -----------------------------
-                // 2) Longitudinal slip -> Fx demand
+                // 2) Tire forces from slip angle (α) and slip ratio (κ)
                 // -----------------------------
-                // Slip speed (m/s): wheel surface speed minus ground speed along wheel forward.
-                float wheelSurfaceSpeed = w.wheelOmega * radius; // m/s (signed)
-                float slipSpeed = wheelSurfaceSpeed - vLong;     // m/s (signed)
+                // Determine if this is a front or rear wheel (for front/rear tuning)
+                // WheelIndex: front = 0,2; rear = 1,3
+                bool isFront = Vehicle.Core.WheelIndex.IsFront(i);
 
-                // Simple “brush-like” model: FxDesired grows with slipSpeed and Fz.
-                // Units: (N) = (N) * (1/(m/s)) * (m/s)
-                float cLong = fz * LongSlipStiffness;
-                float fxDesired = cLong * slipSpeed;
+                // Select front/rear parameters
+                float muLong = mu * (isFront ? MuLongScaleFront : MuLongScaleRear);
+                float muLat = mu * (isFront ? MuLatScaleFront : MuLatScaleRear);
+                float cx = isFront ? CxFront : CxRear;
+                float cy = isFront ? CyFront : CyRear;
+
+                // Maximum available forces (friction budget per axis)
+                float fxMax = muLong * fz;
+                float fyMax = muLat * fz;
+
+                // Raw forces from slip (before combined slip and build-up)
+                // Fx from slip ratio κ: tanh gives smooth saturation
+                float fx0 = fxMax * (float)System.Math.Tanh(cx * kappa);
+
+                // Fy from slip angle α: tanh gives smooth saturation
+                float fyAlpha = -fyMax * (float)System.Math.Tanh(cy * alphaRad);
+
+                // Small lateral damping (stabilizer, optional - currently 0)
+                float fyDamp = -vLat * LatDamp;
+
+                // Total raw lateral force
+                float fy0 = fyAlpha + fyDamp;
+
+                // Store raw forces in debug
+                w.debugFxRaw = fx0;
+                w.debugFyRaw = fy0;
 
                 // -----------------------------
-                // 3) Lateral force (your damping model)
+                // 4) Combined slip (friction ellipse/circle)
                 // -----------------------------
-                float fyDesired = 0f;
-                if (Mathf.Abs(vLat) > 0.001f && latStiffness > 0f)
-                    fyDesired = (-vLat * latStiffness);
+                // Normalize forces by their respective maximums
+                // This allows different μLong and μLat, and proper combined slip behavior
+                float ux = fx0 / Mathf.Max(Epsilon, fxMax);
+                float uy = fy0 / Mathf.Max(Epsilon, fyMax);
 
-                // -----------------------------
-                // 4) Friction circle clamp (Fx + Fy)
-                // -----------------------------
-                float fx = fxDesired;
-                float fy = fyDesired;
+                // Combined utilization: sqrt(ux² + uy²)
+                // If > 1.0, forces exceed friction budget and need to be scaled down
+                float u = Mathf.Sqrt(ux * ux + uy * uy);
 
-                float mag = Mathf.Sqrt(fx * fx + fy * fy);
-                if (mag > fMax && mag > Epsilon)
+                // Apply combined slip constraint (friction ellipse)
+                float fx = fx0;
+                float fy = fy0;
+                if (u > 1f)
                 {
-                    float k = fMax / mag;
-                    fx *= k;
-                    fy *= k;
+                    // Scale down proportionally to stay within friction budget
+                    fx /= u;
+                    fy /= u;
                 }
 
                 // -----------------------------
-                // 5) Apply forces
+                // 6) Apply forces
                 // -----------------------------
                 Vector3 fLong = fwd * fx;
                 Vector3 fLatV = right * fy;
@@ -158,8 +293,9 @@ namespace Vehicle.Systems
                 ctx.rb.AddForceAtPosition(force, w.contactPoint, ForceMode.Force);
 
                 // -----------------------------
-                // 6) Update wheelOmega from torques
+                // 8) Update wheelOmega from torques
                 // Ground reaction torque = Fx * R (opposes net torque)
+                // Uses final Fx (after combined slip + build-up) for correct physics
                 // -----------------------------
                 float groundTq = fx * radius;
                 float wheelNetTq = netTq - groundTq;
@@ -168,25 +304,42 @@ namespace Vehicle.Systems
                 float domega = wheelNetTq / I;
                 w.wheelOmega += domega * ctx.dt;
 
+                // Clamp wheelOmega to prevent runaway (safety measure)
+                // Typical max wheel speed: ~1000 rad/s (for 100 km/h with 0.3m radius)
+                float maxWheelOmega = 1000f; // rad/s
+                w.wheelOmega = Mathf.Clamp(w.wheelOmega, -maxWheelOmega, maxWheelOmega);
+
                 // mild damping prevents runaway oscillations
                 w.wheelOmega *= Mathf.Exp(-WheelOmegaDamping * ctx.dt);
 
                 // -----------------------------
-                // Debug outputs
+                // 7) Debug outputs
                 // -----------------------------
+                // World-space force vectors for gizmos/visualization
                 w.debugLongForce = fLong;
                 w.debugLatForce = fLatV;
 
+                // Velocity and slip info
                 w.debugVLong = vLong;
-                w.debugFxDesired = fxDesired;
-                w.debugFyDesired = fyDesired;
+                w.debugVLat = vLat;
+
+
+                // Legacy fields (for backward compatibility with telemetry)
+                // These now represent "raw" forces before combined slip and build-up
+                w.debugFxDesired = fx0;  // Raw Fx from κ
+                w.debugFyDesired = fy0;  // Raw Fy from α
+
+                // Friction budget (maximum available force)
                 w.debugMuFz = fMax;
 
-                // utilization (based on desired vs budget)
-                float used = Mathf.Sqrt(fxDesired * fxDesired + fyDesired * fyDesired);
-                w.debugUtil = used / Mathf.Max(Epsilon, fMax);
+                // Utilization: how much of friction budget is used (normalized by axis)
+                // Uses normalized components: sqrt((Fx/FxMax)² + (Fy/FyMax)²)
+                // Note: fxMax and fyMax already declared above (lines 265-266)
+                float uxFinal = fx / Mathf.Max(Epsilon, fxMax);
+                float uyFinal = fy / Mathf.Max(Epsilon, fyMax);
+                w.debugUtil = Mathf.Sqrt(uxFinal * uxFinal + uyFinal * uyFinal);
 
-                // legacy fields
+                // Legacy fields (duplicates for compatibility)
                 w.debugDriveForce = fLong;
                 w.debugLateralForce = fLatV;
             }

@@ -197,7 +197,7 @@ namespace Vehicle.UI.Telemetry
                 ? ctx.drivetrainSpec.driveType
                 : DrivetrainSpec.DriveType.FWD;
 
-            // Convention: 0=FL,1=FR,2=RL,3=RR
+            // WheelIndex convention: 0=FL,1=RL,2=FR,3=RR (front=0/2, rear=1/3)
             if (wheelCount < 4)
             {
                 driven = new[] { 0 };
@@ -206,9 +206,9 @@ namespace Vehicle.UI.Telemetry
 
             driven = driveType switch
             {
-                DrivetrainSpec.DriveType.RWD => new[] { 2, 3 },
+                DrivetrainSpec.DriveType.RWD => Vehicle.Core.WheelIndex.Rear,
                 DrivetrainSpec.DriveType.AWD => new[] { 0, 1, 2, 3 },
-                _ => new[] { 0, 1 }, // FWD
+                _ => Vehicle.Core.WheelIndex.Front, // FWD
             };
         }
 

@@ -12,11 +12,9 @@ namespace Vehicle.Systems
     {
         private readonly float _wheelRadius;
 
-        public WheelSystem(float wheelRadius, float sideGrip, float handbrakeGripMultiplier)
+        public WheelSystem(float wheelRadius)
         {
             _wheelRadius = Mathf.Max(0.01f, wheelRadius);
-            // sideGrip/handbrakeGripMultiplier kept in WheelSpec and used by TireForcesSystem.
-            // We keep constructor signature so your pipeline code doesn't change.
         }
 
         public void Tick(in VehicleInput input, ref VehicleState state, in VehicleContext ctx)

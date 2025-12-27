@@ -14,17 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Vehicle.Specs.WheelSpec
   wheelRadius: 0.313
   wheelOffsets:
-  - {x: 0.9, y: 0.8, z: 0.5000002}
-  - {x: 0.9, y: 0.8, z: -0.44}
   - {x: -0.9, y: 0.8, z: 0.5000002}
   - {x: -0.9, y: 0.8, z: -0.44}
-  dryFrictionCoefficient: 0.8
-  wetFrictionCoefficient: 0.5
+  - {x: 0.9, y: 0.8, z: 0.5000002}
+  - {x: 0.9, y: 0.8, z: -0.44}
   friction: 0.9
-  rollingResistance: 0.015
-  sidewallStiffness: 1
-  tirePressure: 2.2
-  tireWidth: 0.2
-  aspectRatio: 55
-  sideGrip: 6
-  handbrakeGripMultiplier: 0.2

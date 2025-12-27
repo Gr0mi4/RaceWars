@@ -23,6 +23,7 @@ namespace Vehicle.UI
         [SerializeField] private bool showForcesModule = true;
         [SerializeField] private bool showWheelsModule = false;
         [SerializeField] private bool showSuspensionModule = false;
+        [SerializeField] private bool showTireModelModule = true;
 
         [Header("Settings")]
         [SerializeField] private float updateInterval = 0.1f;
@@ -42,6 +43,7 @@ namespace Vehicle.UI
         private ForcesTelemetryModule _forcesModule;
         private WheelsTelemetryModule _wheelsModule;
         private SuspensionTelemetryModule _suspensionModule;
+        private TireModelTelemetryModule _tireModelModule;
 
         // UI elements
         private GameObject _container;
@@ -81,6 +83,7 @@ namespace Vehicle.UI
             _forcesModule = new ForcesTelemetryModule(showForcesModule);
             _wheelsModule = new WheelsTelemetryModule(showWheelsModule);
             _suspensionModule = new SuspensionTelemetryModule(showSuspensionModule);
+            _tireModelModule = new TireModelTelemetryModule(showTireModelModule);
         }
 
         private void Update()
@@ -120,6 +123,7 @@ namespace Vehicle.UI
             _forcesModule.SetEnabled(showForcesModule);
             _wheelsModule.SetEnabled(showWheelsModule);
             _suspensionModule.SetEnabled(showSuspensionModule);
+            _tireModelModule.SetEnabled(showTireModelModule);
 
             // Build display text from all enabled modules
             string displayText = string.Empty;
@@ -157,6 +161,11 @@ namespace Vehicle.UI
             if (_suspensionModule.IsEnabled)
             {
                 displayText += _suspensionModule.GetDisplayText(input, state, ctx) + "\n";
+            }
+
+            if (_tireModelModule.IsEnabled)
+            {
+                displayText += _tireModelModule.GetDisplayText(input, state, ctx) + "\n";
             }
 
             _mainText.text = displayText;
