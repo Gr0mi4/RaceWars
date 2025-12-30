@@ -19,6 +19,24 @@ namespace Vehicle.Specs
         public float wheelRadius = 0.3f;
 
         /// <summary>
+        /// Mass of a single wheel+tire assembly in kg.
+        /// Used for calculating wheel moment of inertia (I = k * m * R²).
+        /// Typical: 15-20kg for passenger cars, 20-30kg for sports/performance cars.
+        /// </summary>
+        [Range(5f, 50f)]
+        [Tooltip("Wheel+tire mass in kg. Typical: 15-25kg")]
+        public float wheelMass = 18f;
+
+        /// <summary>
+        /// Inertia shape coefficient for wheel moment of inertia calculation.
+        /// 0.5 = solid disc (mass uniformly distributed), 1.0 = thin ring (all mass at rim).
+        /// Real wheels are typically 0.7-0.9 because most mass is in the tire and rim.
+        /// </summary>
+        [Range(0.5f, 1.0f)]
+        [Tooltip("Inertia coefficient: 0.5=disc, 1.0=ring. Typical wheel: 0.8")]
+        public float wheelInertiaCoefficient = 0.8f;
+
+        /// <summary>
         /// Wheel mount points relative to the vehicle origin (local space).
         /// Order (IMPORTANT - matches WheelIndex):
         /// 0 = Front-Left, 1 = Rear-Left, 2 = Front-Right, 3 = Rear-Right.

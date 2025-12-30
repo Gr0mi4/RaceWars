@@ -10,6 +10,12 @@ namespace Vehicle.Specs
     [CreateAssetMenu(menuName = "Vehicle/Engine Spec", fileName = "EngineSpec")]
     public sealed class EngineSpec : ScriptableObject
     {
+        public enum CurveAuthority
+        {
+            TorqueIsAuthoritative,
+            PowerIsAuthoritative
+        }
+
         [Header("Engine Power")]
         /// <summary>
         /// Maximum engine power in horsepower (HP). This is the peak power output of the engine.
@@ -67,6 +73,19 @@ namespace Vehicle.Specs
         public float rpmInertia = 10f;
 
         [Header("Power and Torque Curves")]
+        [Tooltip("Which curve is treated as the source of truth. The other curve can be derived for consistency (optional). Runtime should use a single consistent torque curve (no blending of two independent sources).")]
+        public CurveAuthority curveAuthority = CurveAuthority.TorqueIsAuthoritative;
+
+        [Tooltip("If enabled, automatically derives the secondary curve from the authoritative one in OnValidate so torqueCurve and powerCurve remain physically consistent (P=τω).")]
+        public bool autoDeriveSecondaryCurve = true;
+
+        [Tooltip("If enabled, updates maxPower/maxTorque to match the peak of the authoritative curve (recommended when deriving the secondary curve).")]
+        public bool autoUpdatePeaksFromAuthoritative = true;
+
+        [Range(8, 256)]
+        [Tooltip("How many samples to use when deriving curves in OnValidate. Higher = more accurate, but noisier curves if too high.")]
+        public int deriveSampleCount = 64;
+
         /// <summary>
         /// Power curve normalized by RPM (0-1). X-axis: normalized RPM (0 = idleRPM, 1 = maxRPM).
         /// Y-axis: power multiplier (0-1, where 1 = maxPower).
@@ -82,16 +101,6 @@ namespace Vehicle.Specs
         /// </summary>
         [Tooltip("Torque curve: X = normalized RPM (0=idle, 1=max), Y = torque multiplier (0-1)")]
         public AnimationCurve torqueCurve = AnimationCurve.Linear(0f, 0.8f, 1f, 0.6f);
-
-        [Header("Physics Settings")]
-        /// <summary>
-        /// Minimum speed in m/s below which power-based force calculation is avoided.
-        /// Used to prevent division by zero when calculating force from power (F = P/v).
-        /// At very low speeds, torque-based calculation is used instead.
-        /// </summary>
-        [Range(0.01f, 1.0f)]
-        [Tooltip("Minimum speed (m/s) for power-based force calculation. Lower speeds use torque.")]
-        public float minSpeedForPower = 0.5f;
 
         /// <summary>
         /// Validates the engine specification parameters.
@@ -116,6 +125,9 @@ namespace Vehicle.Specs
                 torqueCurve = AnimationCurve.Linear(0f, 0.8f, 1f, 0.6f);
             }
 
+            maxPower = Mathf.Max(1f, maxPower);
+            maxTorque = Mathf.Max(1f, maxTorque);
+
             // Clamp curve values to reasonable ranges
             if (powerCurve.length > 0)
             {
@@ -136,6 +148,133 @@ namespace Vehicle.Specs
                     torqueCurve.MoveKey(i, key);
                 }
             }
+
+            if (autoDeriveSecondaryCurve)
+            {
+                DeriveSecondaryCurve();
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // Evaluation helpers (used by runtime systems)
+        // --------------------------------------------------------------------
+
+        public float NormalizeRpm01(float rpm)
+        {
+            float denom = Mathf.Max(1f, maxRPM - idleRPM);
+            return Mathf.Clamp01((rpm - idleRPM) / denom);
+        }
+
+        public float RpmFromNormalized01(float t)
+        {
+            t = Mathf.Clamp01(t);
+            return Mathf.Lerp(idleRPM, maxRPM, t);
+        }
+
+        public float OmegaRadSFromRpm(float rpm)
+        {
+            return rpm * (2f * Mathf.PI / 60f);
+        }
+
+        public float MaxPowerWatts => maxPower * 745.699872f;
+
+        // --------------------------------------------------------------------
+        // Curve derivation (Editor-time consistency enforcement)
+        // --------------------------------------------------------------------
+
+        private void DeriveSecondaryCurve()
+        {
+            int n = Mathf.Clamp(deriveSampleCount, 8, 256);
+
+            // Sample authoritative physical curve (either τ(rpm) or P(rpm))
+            float peakTorque = 0f;
+            float peakPowerW = 0f;
+
+            // First pass: find peaks in physical units
+            for (int i = 0; i < n; i++)
+            {
+                float t = (n == 1) ? 0f : (float)i / (n - 1);
+                float rpm = RpmFromNormalized01(t);
+                float omega = Mathf.Max(1e-3f, OmegaRadSFromRpm(rpm));
+
+                float torqueNm;
+                float powerW;
+
+                if (curveAuthority == CurveAuthority.TorqueIsAuthoritative)
+                {
+                    float mult = torqueCurve.Evaluate(t);
+                    torqueNm = Mathf.Max(0f, maxTorque * mult);
+                    powerW = torqueNm * omega;
+                }
+                else
+                {
+                    float mult = powerCurve.Evaluate(t);
+                    powerW = Mathf.Max(0f, MaxPowerWatts * mult);
+                    torqueNm = powerW / omega;
+                }
+
+                peakTorque = Mathf.Max(peakTorque, torqueNm);
+                peakPowerW = Mathf.Max(peakPowerW, powerW);
+            }
+
+            // Avoid degenerate peaks
+            peakTorque = Mathf.Max(1e-3f, peakTorque);
+            peakPowerW = Mathf.Max(1e-3f, peakPowerW);
+
+            // Optionally update scalar peaks to match authoritative curve
+            if (autoUpdatePeaksFromAuthoritative)
+            {
+                if (curveAuthority == CurveAuthority.TorqueIsAuthoritative)
+                {
+                    maxPower = peakPowerW / 745.699872f;
+                }
+                else
+                {
+                    maxTorque = peakTorque;
+                }
+            }
+
+            // Second pass: build normalized secondary curve
+            var keys = new Keyframe[n];
+            for (int i = 0; i < n; i++)
+            {
+                float t = (n == 1) ? 0f : (float)i / (n - 1);
+                float rpm = RpmFromNormalized01(t);
+                float omega = Mathf.Max(1e-3f, OmegaRadSFromRpm(rpm));
+
+                float torqueNm;
+                float powerW;
+
+                if (curveAuthority == CurveAuthority.TorqueIsAuthoritative)
+                {
+                    float torqueMult = torqueCurve.Evaluate(t);
+                    torqueNm = Mathf.Max(0f, maxTorque * torqueMult);
+                    powerW = torqueNm * omega;
+
+                    float pNorm = Mathf.Clamp01(powerW / Mathf.Max(1e-3f, MaxPowerWatts));
+                    keys[i] = new Keyframe(t, pNorm);
+                }
+                else
+                {
+                    float powerMult = powerCurve.Evaluate(t);
+                    powerW = Mathf.Max(0f, MaxPowerWatts * powerMult);
+                    torqueNm = powerW / omega;
+
+                    float tNorm = Mathf.Clamp01(torqueNm / Mathf.Max(1e-3f, maxTorque));
+                    keys[i] = new Keyframe(t, tNorm);
+                }
+            }
+
+            var derived = new AnimationCurve(keys);
+
+            // Keep it smooth-ish by default
+            derived.preWrapMode = WrapMode.ClampForever;
+            derived.postWrapMode = WrapMode.ClampForever;
+
+            if (curveAuthority == CurveAuthority.TorqueIsAuthoritative)
+                powerCurve = derived;
+            else
+                torqueCurve = derived;
         }
     }
 }

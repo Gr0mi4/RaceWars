@@ -14,6 +14,8 @@ namespace Vehicle.Systems
     /// </summary>
     public sealed class EngineSystem
     {
+        private const float HpToWatts = 745.699872f;
+
         // ---------------- KINEMATICS ----------------
 
         public float CalculateEngineRPMFromWheel(float wheelOmegaRadS, float gearRatio, float finalDriveRatio)
@@ -51,9 +53,33 @@ namespace Vehicle.Systems
                 return 0f;
             }
 
+            float torqueNm = GetMaxDriveTorqueNmAtRpm(rpm, spec);
+            return torqueNm * throttle01;
+        }
+
+        /// <summary>
+        /// Returns positive drive torque capability at this RPM (Nm) BEFORE throttle.
+        /// This reads a single physically-consistent source (either torqueCurve or powerCurve->P/ω),
+        /// depending on EngineSpec.curveAuthority.
+        /// </summary>
+        private float GetMaxDriveTorqueNmAtRpm(float rpm, EngineSpec spec)
+        {
+            rpm = Mathf.Clamp(rpm, 0f, spec.maxRPM);
+
             float t = NormalizeRPM01(rpm, spec.idleRPM, spec.maxRPM);
-            float mult = spec.torqueCurve.Evaluate(t);
-            return spec.maxTorque * mult * throttle01;
+
+            if (spec.curveAuthority == EngineSpec.CurveAuthority.PowerIsAuthoritative)
+            {
+                float omega = Mathf.Max(1e-3f, rpm * (2f * Mathf.PI / 60f));
+                float powerW = Mathf.Max(0f, spec.maxPower * HpToWatts * spec.powerCurve.Evaluate(t));
+                float torqueFromPower = powerW / omega;
+                return Mathf.Max(0f, torqueFromPower);
+            }
+            else
+            {
+                float mult = spec.torqueCurve.Evaluate(t);
+                return Mathf.Max(0f, spec.maxTorque * mult);
+            }
         }
 
         /// <summary>
@@ -130,6 +156,7 @@ namespace Vehicle.Systems
             if (Mathf.Abs(engineOmegaSign) < 1e-4f)
                 dragSigned = -dragMag;
 
+            // Shaft torque = drive + signed drag (drag is typically negative when rotating forward).
             return drive + dragSigned;
         }
 
