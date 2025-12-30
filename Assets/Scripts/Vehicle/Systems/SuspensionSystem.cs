@@ -107,7 +107,9 @@ namespace Vehicle.Systems
                         // ------------------------------------------------
                         // 4.3 Spring + damper force
                         // ------------------------------------------------
-                        Vector3 axis = ctx.Up;
+                        // Support direction: push along ground normal (better on slopes/banks)
+                        Vector3 axis = hit.normal.normalized;
+                        // Relative velocity along suspension/support axis
                         float relVel = Vector3.Dot(ctx.rb.GetPointVelocity(hit.point), axis);
 
                         float springForce = compression > 0f ? springK * compression : 0f;
