@@ -157,7 +157,9 @@ namespace Vehicle.Systems
                 dragSigned = -dragMag;
 
             // Shaft torque = drive + signed drag (drag is typically negative when rotating forward).
-            return drive + dragSigned;
+            // return drive + dragSigned;
+            // While active testing, disabled engine drag due to realism issuses;
+            return drive;
         }
 
         private float NormalizeRPM01(float rpm, float idle, float max)
